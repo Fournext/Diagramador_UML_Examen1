@@ -1,0 +1,27 @@
+     <div class="side-panel">
+        <div
+            class="palette-item"
+            cdkDrag
+            [cdkDragData]="{ type: 'class' }"
+            (cdkDragEnded)="onDragEnded($event)"
+            cdkDragPreviewClass="drag-preview"
+            [cdkDragDisabled]="false">
+            <div class="item-content">📦 Clase UML</div>
+            <ng-template cdkDragPreview>
+                <div class="drag-preview class-preview">📦 Clase UML</div>
+            </ng-template>
+        </div>
+
+        <div
+            class="palette-item"
+            cdkDrag
+            [cdkDragData]="{ type: 'association' }"
+            (cdkDragEnded)="onDragEnded($event)"
+            cdkDragPreviewClass="drag-preview"
+            [cdkDragDisabled]="false">
+            <div class="item-content">🔗 Relación</div>
+            <ng-template cdkDragPreview>
+                <div class="drag-preview relation-preview">🔗 Relación</div>
+            </ng-template>
+        </div>
+    </div>

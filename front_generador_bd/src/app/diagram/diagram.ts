@@ -1,41 +1,119 @@
-import { AfterViewInit, Component, ElementRef, Inject, PLATFORM_ID, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, Inject, NgZone, PLATFORM_ID, ViewChild } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
+import { CdkDragEnd, CdkDropListGroup, CdkDropList } from '@angular/cdk/drag-drop';
+import { SidePanel } from "../side-panel/side-panel";
+import { DiagramService } from '../../services/diagram.service';
+import { FallbackService } from '../../services/fallback.service';
+import { RelationshipService } from '../../services/relationship.service';
+import { UmlClass, Attribute, Method } from '../../models/uml-class.model';
 
 @Component({
   selector: 'app-diagram',
   standalone: true,
   templateUrl: './diagram.html',
-  styleUrls: ['./diagram.css']
+  styleUrls: ['./diagram.css'],
+  imports: [SidePanel, CdkDropListGroup, CdkDropList]
 })
 export class Diagram implements AfterViewInit {
   @ViewChild('paperContainer', { static: true }) paperContainer!: ElementRef;
-
-  constructor(@Inject(PLATFORM_ID) private platformId: Object) {}
+  @ViewChild(SidePanel) sidePanel!: SidePanel;
+  
+  constructor(
+    @Inject(PLATFORM_ID) private platformId: Object,
+    private ngZone: NgZone,
+    private diagramService: DiagramService,
+    private fallbackService: FallbackService,
+    private relationshipService: RelationshipService
+  ) {}
 
   async ngAfterViewInit(): Promise<void> {
     if (isPlatformBrowser(this.platformId)) {
-      const joint = await import('jointjs');
-      console.log('shapes disponibles:', joint.shapes.uml);
-
-      const graph = new joint.dia.Graph();
-      const paper = new joint.dia.Paper({
-        el: this.paperContainer.nativeElement,
-        model: graph,
-        width: 800,   // Fijo para pruebas
-        height: 600,  // Fijo para pruebas
-        gridSize: 10,
-        drawGrid: true
+      // Ejecutamos dentro de ngZone para asegurar la detección de cambios
+      this.ngZone.run(async () => {
+        try {
+          // Inicializar el servicio de diagrama con el elemento del canvas
+          await this.diagramService.initialize(this.paperContainer.nativeElement);
+          
+          // Escuchar el evento de arrastre desde el panel lateral
+          this.sidePanel.elementDragged.subscribe((event: CdkDragEnd) => {
+            this.onDragEnded(event);
+          });
+          
+          console.log('Diagrama inicializado correctamente');
+        } catch (error) {
+          console.error('Error al inicializar el diagrama:', error);
+        }
       });
-
-      const class1 = new joint.shapes.uml.Class({
-        position: { x: 50, y: 50 },
-        size: { width: 180, height: 120 },
-        name: ['Usuario'], // 👈 string, no array
-        attributes: ['+ id: number', '+ nombre: string'],
-        methods: ['+ login()', '+ logout()']
-      });
-
-      graph.addCell(class1);
     }
   }
+
+  onDragEnded(event: CdkDragEnd) {
+    // Ejecutamos dentro de ngZone para asegurar la detección de cambios
+    this.ngZone.run(() => {
+      const type = (event.source.data as any).type;
+      const { x, y } = event.dropPoint; // posición absoluta en pantalla
+
+      // Ajustar posición relativa al canvas
+      const rect = this.paperContainer.nativeElement.getBoundingClientRect();
+      const pos = { x: x - rect.left, y: y - rect.top };
+
+      console.log('Elemento arrastrado:', type, 'Posición:', pos);
+
+      if (type === 'class') {
+        try {
+          // Crear un modelo de clase UML
+          const umlClassModel: UmlClass = {
+            name: 'Entidad',
+            position: pos,
+            size: { width: 180, height: 110 },
+            attributes: [
+              { name: 'id', type: 'int' },
+              { name: 'nombre', type: 'string' }
+            ],
+            methods: [
+              { name: 'crear' },
+              { name: 'eliminar' }
+            ]
+          };
+          
+          // Usar el servicio para crear la clase UML
+          this.diagramService.createUmlClass(umlClassModel);
+          console.log('Entidad UML creada correctamente');
+        } catch (error) {
+          console.error('Error al crear el elemento:', error);
+          
+          // Si falla, usamos el fallback HTML
+          const fallbackClass: UmlClass = {
+            name: 'Entidad',
+            position: pos,
+            attributes: [
+              { name: 'id', type: 'int' },
+              { name: 'nombre', type: 'string' }
+            ],
+            methods: [
+              { name: 'crear' },
+              { name: 'eliminar' }
+            ]
+          };
+          
+          this.fallbackService.createFallbackElement(
+            this.paperContainer.nativeElement, 
+            fallbackClass
+          );
+        }
+      }
+
+      if (type === 'association') {
+        // Usar el servicio de relaciones
+        this.relationshipService.startLinkCreation(
+          this.diagramService['paper'], // Accedemos al papel a través del servicio
+          this.paperContainer.nativeElement
+        );
+        console.log('Modo de creación de relación activado');
+      }
+    });
+  }
+
+
 }
+

@@ -1,1 +1,8 @@
-<div #paperContainer class="diagram-container"></div>
+<div class="app-layout">
+  <app-side-panel #sidePanel></app-side-panel>
+  <div class="canvas-wrapper" cdkDropListGroup>
+    <div #paperContainer class="diagram-container" cdkDropList>
+      <!-- Aquí se renderizará el canvas de JointJS -->
+    </div>
+  </div>
+</div>
