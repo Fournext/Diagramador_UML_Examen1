@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, Inject, NgZone, PLATFORM_ID, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, HostListener, Inject, NgZone, PLATFORM_ID, ViewChild } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { CdkDragEnd, CdkDropListGroup, CdkDropList } from '@angular/cdk/drag-drop';
 import { SidePanel } from "../side-panel/side-panel";
@@ -46,6 +46,19 @@ export class Diagram implements AfterViewInit {
       });
     }
   }
+
+
+  @HostListener('document:keydown', ['$event'])
+  handleEscape(event: KeyboardEvent) {
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      this.diagramService.deleteSelected();
+    }
+    if (event.key === 'Escape') {
+      this.diagramService.clearSelection();
+    }
+  }
+  
+
 
   onDragEnded(event: CdkDragEnd) {
     // Ejecutamos dentro de ngZone para asegurar la detección de cambios
@@ -103,14 +116,15 @@ export class Diagram implements AfterViewInit {
         }
       }
 
-      if (type === 'association') {
-        // Usar el servicio de relaciones
+      if (['association','generalization','aggregation','composition','dependency'].includes(type)) {
         this.relationshipService.startLinkCreation(
-          this.diagramService['paper'], // Accedemos al papel a través del servicio
-          this.paperContainer.nativeElement
+          this.diagramService['paper'],
+          this.paperContainer.nativeElement,
+          type // 👈 pasamos el tipo
         );
-        console.log('Modo de creación de relación activado');
+        console.log(`Modo de creación de relación activado: ${type}`);
       }
+
     });
   }
 

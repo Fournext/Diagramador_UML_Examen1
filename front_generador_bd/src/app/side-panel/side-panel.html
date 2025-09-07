@@ -1,27 +1,51 @@
-     <div class="side-panel">
-        <div
-            class="palette-item"
-            cdkDrag
-            [cdkDragData]="{ type: 'class' }"
-            (cdkDragEnded)="onDragEnded($event)"
-            cdkDragPreviewClass="drag-preview"
-            [cdkDragDisabled]="false">
-            <div class="item-content">📦 Clase UML</div>
-            <ng-template cdkDragPreview>
-                <div class="drag-preview class-preview">📦 Clase UML</div>
-            </ng-template>
-        </div>
+<div class="side-panel">
 
-        <div
-            class="palette-item"
-            cdkDrag
-            [cdkDragData]="{ type: 'association' }"
-            (cdkDragEnded)="onDragEnded($event)"
-            cdkDragPreviewClass="drag-preview"
-            [cdkDragDisabled]="false">
-            <div class="item-content">🔗 Relación</div>
-            <ng-template cdkDragPreview>
-                <div class="drag-preview relation-preview">🔗 Relación</div>
-            </ng-template>
-        </div>
-    </div>
+  <div
+    class="palette-item"
+    cdkDrag
+    [cdkDragData]="{ type: 'class' }"
+    (cdkDragEnded)="onDragEnded($event)">
+    <div class="item-content">📦 Clase UML</div>
+  </div>
+
+  <div
+    class="palette-item"
+    cdkDrag
+    [cdkDragData]="{ type: 'association' }"
+    (cdkDragEnded)="onDragEnded($event)">
+    <div class="item-content">🔗 Asociación</div>
+  </div>
+
+  <div
+    class="palette-item"
+    cdkDrag
+    [cdkDragData]="{ type: 'generalization' }"
+    (cdkDragEnded)="onDragEnded($event)">
+    <div class="item-content">⬆️ Herencia</div>
+  </div>
+
+  <div
+    class="palette-item"
+    cdkDrag
+    [cdkDragData]="{ type: 'aggregation' }"
+    (cdkDragEnded)="onDragEnded($event)">
+    <div class="item-content">◇ Agregación</div>
+  </div>
+
+  <div
+    class="palette-item"
+    cdkDrag
+    [cdkDragData]="{ type: 'composition' }"
+    (cdkDragEnded)="onDragEnded($event)">
+    <div class="item-content">◆ Composición</div>
+  </div>
+
+  <div
+    class="palette-item"
+    cdkDrag
+    [cdkDragData]="{ type: 'dependency' }"
+    (cdkDragEnded)="onDragEnded($event)">
+    <div class="item-content">⋯ Dependencia</div>
+  </div>
+
+</div>
