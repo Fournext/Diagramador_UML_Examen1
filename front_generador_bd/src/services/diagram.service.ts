@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { UmlClass } from '../models/uml-class.model';
+import { EditionService } from './edition.service';
 
 @Injectable({
   providedIn: 'root'
@@ -9,6 +10,7 @@ export class DiagramService {
   private graph: any;
   private paper: any;
   private selectedCell: any = null;
+  constructor(private edition: EditionService /* ... */) {}
 
   // === Constantes de tamaño mínimo ===
   private readonly MIN_W = 180;   // tu ancho estándar inicial
@@ -101,7 +103,8 @@ export class DiagramService {
         else if (relY < sep2Y) field = 'attributes';
         else field = 'methods';
 
-        if (field) this.startEditing(model, field, x, y);
+        //if (field) this.startEditing(model, field, x, y);
+        if (field) this.edition.startEditing(model, this.paper, field, x, y);
       });
 
 
@@ -117,7 +120,7 @@ export class DiagramService {
           // 🔹 Abrir editor solo si fue sobre un label
           const label = model.label(labelIndex);
           const currentValue = label?.attrs?.text?.text || '';
-          this.startEditingLabel(model, labelIndex, currentValue, x, y);
+          this.edition.startEditingLabel(model, this.paper, labelIndex, currentValue, x, y);
 
           // Opcional: resaltar visualmente el label en edición
           const labelNode = linkView.findLabelNode(labelIndex) as SVGElement;
@@ -127,11 +130,6 @@ export class DiagramService {
           }
         }
       );
-
-
-
-
-
 
       //👉 Clic derecho en una relación para añadir una nueva etiqueta
       this.paper.on('link:contextmenu', (linkView: any, evt: MouseEvent, x: number, y: number) => {
@@ -155,7 +153,7 @@ export class DiagramService {
 
         // Abrir editor inmediatamente
         const newIndex = model.labels().length - 1;
-        this.startEditingLabel(model, newIndex, 'label', x, y);
+        this.edition.startEditingLabel(model, this.paper, newIndex, 'label', x, y);
       });
 
 
@@ -168,151 +166,17 @@ export class DiagramService {
   }
 
   /**************************************************************************************************
-  *                   EDICIÓN DE CLASES Y RELACIONES
+  *                   EDICIÓN DE RELACIONES
   ***************************************************************************************************/ 
-
-  private startEditing(model: any, field: 'name' | 'attributes' | 'methods', x: number, y: number) {
-    // Mapa de selectores correctos en tu shape
-    const SELECTOR_MAP: Record<typeof field, string> = {
-      name: '.uml-class-name-text',
-      attributes: '.uml-class-attrs-text',   
-      methods: '.uml-class-methods-text'
-    };
-
-    const selector = SELECTOR_MAP[field];
-
-    // Valor actual desde attrs (no model.set/get directos)
-    const currentValue = model.attr(`${selector}/text`) || '';
-
-    // Colocación del editor sobre el Paper
-    const paperRect = this.paper.el.getBoundingClientRect();
-    const bbox = model.getBBox();
-    const absX = paperRect.left + x;
-    const absY = paperRect.top + y;
-
-    // Input para name, Textarea para attributes/methods
-    const editor = (field === 'name') ? document.createElement('input') : document.createElement('textarea');
-    editor.value = currentValue;
-    editor.style.position = 'absolute';
-    editor.style.left = `${absX}px`;
-    editor.style.top = `${absY}px`;
-    editor.style.border = '1px solid #2196f3';
-    editor.style.padding = '2px';
-    editor.style.zIndex = '1000';
-    editor.style.fontSize = '14px';
-    editor.style.background = '#fff';
-    // Ancho razonable según el elemento (márgenes ~20px)
-    editor.style.minWidth = Math.max(120, bbox.width - 20) + 'px';
-
-    if (field !== 'name') {
-      (editor as HTMLTextAreaElement).rows = 4;
-      editor.style.resize = 'none';
-    }
-
-    document.body.appendChild(editor);
-    editor.focus();
-
-    let closed = false;
-    const finish = (save: boolean) => {
-      if (closed) return;
-      closed = true;
-
-      if (save) {
-        const raw = (editor as HTMLInputElement | HTMLTextAreaElement).value;
-        const newValue = (field === 'name') ? raw.trim() : raw.replace(/\r?\n/g, '\n');
-
-        model.attr(`${selector}/text`, newValue);
-        this.scheduleAutoResize(model);
-      }
-
-      if (editor.parentNode) editor.parentNode.removeChild(editor);
-    };
-
-
-    // Blur: guarda (como draw.io)
-    editor.addEventListener('blur', () => finish(true));
-
-    editor.addEventListener('keydown', (e: Event) => {
-      const ke = e as KeyboardEvent;
-      if (field === 'name') {
-        // Enter guarda, Escape cancela
-        if (ke.key === 'Enter') { ke.preventDefault(); finish(true); }
-        if (ke.key === 'Escape') { ke.preventDefault(); finish(false); }
-      } else {
-        // Atributos / Métodos (textarea):
-        // Shift+Enter = salto de línea (default)
-        // Enter = guardar
-        if (ke.key === 'Enter' && !ke.shiftKey) { ke.preventDefault(); finish(true); }
-        if (ke.key === 'Escape') { ke.preventDefault(); finish(false); }
-      }
-    });
+  
+  // Crea una relación entre dos elementos y la añade al grafo
+  createRelationship(sourceId: string, targetId: string, labelText: string = '1:n'): any {
+    const link = this.buildRelationship(sourceId, targetId);
+    this.graph.addCell(link);
+    return link;
   }
 
-  private startEditingLabel(model: any, labelIndex: number, currentValue: string, x: number, y: number) {
-    const paperRect = this.paper.el.getBoundingClientRect();
-    const absX = paperRect.left + x;
-    const absY = paperRect.top + y;
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = currentValue;
-    input.style.position = 'absolute';
-    input.style.left = `${absX}px`;
-    input.style.top = `${absY}px`;
-    input.style.border = '1px solid #2196f3';
-    input.style.padding = '2px';
-    input.style.zIndex = '1000';
-    input.style.fontSize = '12px';
-    input.style.background = '#fff';
-    input.style.minWidth = '60px';
-
-    document.body.appendChild(input);
-    input.focus();
-
-    let closed = false;
-    const labelNode = (this.paper.findViewByModel(model) as any).findLabelNode(labelIndex) as SVGElement;
-    if (labelNode) {
-      labelNode.setAttribute('stroke', '#2196f3');
-      labelNode.setAttribute('stroke-width', '1');
-    }
-
-    const finish = (save: boolean) => {
-      if (closed) return;
-      closed = true;
-
-      if (save) {
-        model.label(labelIndex, {
-          ...model.label(labelIndex),
-          attrs: { text: { text: input.value.trim() } }
-        });
-      }
-
-      if (input.parentNode) input.parentNode.removeChild(input);
-
-      // quitar highlight
-      if (labelNode) {
-        labelNode.removeAttribute('stroke');
-        labelNode.removeAttribute('stroke-width');
-      }
-    };
-
-    // blur guarda
-    input.addEventListener('blur', () => finish(true));
-
-    input.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === 'Escape' || e.key === ' ') {
-        e.preventDefault();
-        finish(e.key !== 'Escape'); // Enter/Espacio = guardar, Escape = cancelar
-      }
-    });
-  }
-
-
-
-  /**
-   * Crea una relación entre dos elementos
-   */
-
+  // Construye una relación (link) con configuración por defecto
   private buildRelationship(sourceId?: string, targetId?: string) {
     return new this.joint.dia.Link({
       name: 'Relacion',
@@ -329,18 +193,9 @@ export class DiagramService {
     });
   }
 
-
-  createRelationship(sourceId: string, targetId: string, labelText: string = '1:n'): any {
-    const link = this.buildRelationship(sourceId, targetId);
-    this.graph.addCell(link);
-    return link;
-  }
-
-
   /**************************************************************************************************
   *                  FUNCIONES AUXILIARES
   ***************************************************************************************************/ 
-
 
   deleteSelected(): void {
     if (this.selectedCell) {
@@ -361,6 +216,7 @@ export class DiagramService {
 
   }
 
+  // ========= Obtener índice de etiqueta clicada =========
   private getClickedLabelIndex(linkView: any, evt: MouseEvent): number | null {
     const labels = linkView.model.labels();
     if (!labels || labels.length === 0) return null;
@@ -377,34 +233,11 @@ export class DiagramService {
     return null; // 👉 No fue sobre una etiqueta
   }
 
-  private getTextBBox(model: any, selector: string): number {
-    const view = this.paper.findViewByModel(model);
-    const node = view?.findBySelector(selector)?.[0] as SVGGraphicsElement | undefined;
-    try { return node ? node.getBBox().height : 0; } catch { return 0; }
-  }
-
-  private updatePorts(model: any) {
-    if (!model?.isElement?.()) return;
-    const { width, height } = model.size();
-    model.portProp('top',    'args', { x: width / 2, y: 0 });
-    model.portProp('bottom', 'args', { x: width / 2, y: height });
-    model.portProp('left',   'args', { x: 0,        y: height / 2 });
-    model.portProp('right',  'args', { x: width,    y: height / 2 });
-  }
-
-
-
-
-
-
-
   /**************************************************************************************************
   *                  CONFIFURACIÓN Y CREACIÓN DE UML
   ***************************************************************************************************/ 
 
-  /**
-   * Crea una clase UML con la estructura de tres compartimentos
-   */
+  // ========= Crea una clase UML con la estructura de tres compartimentos =========
   createUmlClass(classModel: UmlClass): any {
     try {
       if (!this.joint || !this.graph) {
@@ -441,11 +274,11 @@ export class DiagramService {
       umlClass.addPort({ group: 'inout', id: 'left' });
       umlClass.addPort({ group: 'inout', id: 'right' });
 
-      umlClass.on('change:size',  () => this.updatePorts(umlClass));
-      umlClass.on('change:attrs', () => this.scheduleAutoResize(umlClass));
+      umlClass.on('change:size',  () => this.edition.updatePorts(umlClass));
+      umlClass.on('change:attrs', () => this.edition.scheduleAutoResize(this.paper,umlClass));
 
       this.graph.addCell(umlClass);
-      this.scheduleAutoResize(umlClass);      // ✅ tamaño inicial
+      this.edition.scheduleAutoResize(this.paper, umlClass);      // ✅ tamaño inicial
       umlClass.toFront();
 
       return umlClass;
@@ -456,9 +289,7 @@ export class DiagramService {
     }
   }
   
-  /**
-   * Configura los eventos interactivos para un elemento
-   */
+  // ========= Configura los eventos interactivos para un elemento =========
   setupClassInteraction(element: any): void {
     try {
       const elementView = this.paper.findViewByModel(element);
@@ -474,9 +305,8 @@ export class DiagramService {
     }
   }
   
-  /**
-   * Crea un namespace UML personalizado si no existe en JointJS
-   */
+  
+  // ========= Crea un namespace UML personalizado si no existe en JointJS =========
   private createUmlNamespace(): void {
     if (!this.joint) return;
     if (this.joint.shapes.custom && this.joint.shapes.custom.UMLClass) {
@@ -547,7 +377,6 @@ export class DiagramService {
 
     });
 
-
     // 🔹 Método updateRectangles para refrescar textos
     this.joint.shapes.custom.UMLClass.prototype.updateRectangles = function() {
       this.attr({
@@ -561,56 +390,6 @@ export class DiagramService {
       this.on('change:name change:attributes change:methods', this.updateRectangles, this);
       this.updateRectangles();
       this.constructor.__super__.initialize.apply(this, arguments);
-    };
-    
+    }; 
   }
-
-  // === Ajusta alto de compartimentos y del elemento según el texto ===
-  private autoResizeUmlClass = (model: any) => {
-    if (!model?.isElement?.()) return;
-
-    const width  = Math.max(this.MIN_W, (model.get('size')?.width) || this.MIN_W);
-    const nameH  = this.NAME_H;
-    const padV   = this.PAD_V;
-
-    const attrsHText = this.getTextBBox(model, '.uml-class-attrs-text');
-    const methsHText = this.getTextBBox(model, '.uml-class-methods-text');
-
-    const attrsH = Math.max(this.MIN_ATTRS_H, Math.round((attrsHText || 0) + padV));
-    const methsH = Math.max(this.MIN_METHS_H, Math.round((methsHText || 0) + padV));
-    const totalH = Math.round(nameH + attrsH + methsH);
-
-    // header
-    model.attr('.uml-class-name-rect/height', nameH);
-    model.attr('.uml-class-name-rect/refWidth', '100%'); // por si no lo tenías
-
-    // separadores (1px nítidos)
-    const x1 = 1, x2 = width - 1;         // dentro del borde 2px
-    const y1 = Math.round(nameH) + 0.5;   // fin header
-    const y2 = Math.round(nameH + attrsH) + 0.5; // fin atributos
-
-    model.attr({
-      '.sep-name':  { x1, y1, x2, y2: y1 },
-      '.sep-attrs': { x1, y1: y2, x2, y2 }
-    });
-
-    // textos
-    model.attr('.uml-class-attrs-text/transform',  `translate(10, ${Math.round(nameH + 10)})`);
-    model.attr('.uml-class-attrs-text/textWrap/width', width - 20);
-
-    model.attr('.uml-class-methods-text/transform', `translate(10, ${Math.round(nameH + attrsH + 10)})`);
-    model.attr('.uml-class-methods-text/textWrap/width', width - 20);
-
-    // tamaño + puertos
-    model.resize(width, totalH);
-    this.updatePorts(model);
-  };
-
-  // Llama a autoResize cuando el SVG ya se re-pintó (2 frames)
-  private scheduleAutoResize(model: any) {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => this.autoResizeUmlClass(model));
-    });
-  }
-
 }
