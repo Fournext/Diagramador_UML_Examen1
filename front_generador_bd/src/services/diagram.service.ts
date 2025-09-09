@@ -10,6 +10,14 @@ export class DiagramService {
   private paper: any;
   private selectedCell: any = null;
 
+  // === Constantes de tamaño mínimo ===
+  private readonly MIN_W = 180;   // tu ancho estándar inicial
+  private readonly NAME_H = 30;   // cabecera fija
+  private readonly MIN_ATTRS_H = 40;
+  private readonly MIN_METHS_H = 40;
+  private readonly PAD_V = 10;    // padding vertical extra
+
+
   /**
    * Inicializa JointJS y configura el papel y grafo
    */
@@ -49,31 +57,24 @@ export class DiagramService {
 
       //Seleccionar Una clase UML
       this.paper.on('cell:pointerclick', (cellView: any) => {
-        if (this.selectedCell && this.selectedCell.isElement && this.selectedCell.isElement()) {
-          // reset estilo + ocultar puertos
-          this.selectedCell.attr('.uml-class-name-rect/stroke', '#2196f3');
-          this.selectedCell.attr('.uml-class-attrs-rect/stroke', '#2196f3');
-          this.selectedCell.attr('.uml-class-methods-rect/stroke', '#2196f3');
-          this.selectedCell.attr('.uml-class-name-rect/stroke-width', 2);
+        if (this.selectedCell?.isElement?.()) {
+          this.selectedCell.attr('.uml-outer/stroke', '#2196f3');
+          this.selectedCell.attr('.uml-outer/stroke-width', 2);
           this.selectedCell.getPorts().forEach((p: any) => {
             this.selectedCell.portProp(p.id, 'attrs/circle/display', 'none');
           });
         }
 
-        // Guardar nuevo seleccionado
         this.selectedCell = cellView.model;
 
-        if (this.selectedCell.isElement && this.selectedCell.isElement()) {
-          // highlight + mostrar puertos
-          this.selectedCell.attr('.uml-class-name-rect/stroke', '#ff9800');
-          this.selectedCell.attr('.uml-class-attrs-rect/stroke', '#ff9800');
-          this.selectedCell.attr('.uml-class-methods-rect/stroke', '#ff9800');
-          this.selectedCell.attr('.uml-class-name-rect/stroke-width', 3);
-
+        if (this.selectedCell?.isElement?.()) {
+          this.selectedCell.attr('.uml-outer/stroke', '#ff9800');   // highlight
+          this.selectedCell.attr('.uml-outer/stroke-width', 2);
           this.selectedCell.getPorts().forEach((p: any) => {
             this.selectedCell.portProp(p.id, 'attrs/circle/display', 'block');
           });
         }
+
       });
 
 
@@ -85,29 +86,24 @@ export class DiagramService {
       this.paper.on('cell:pointerdblclick', (cellView: any, evt: any, x: number, y: number) => {
         this.clearSelection();
         const model = cellView.model;
-        const bbox = model.getBBox();
-        const relativeY = y - bbox.y;
+        if (!model?.isElement?.()) return;
 
-        const nameH = 30;
-        const attrsH = parseFloat(model.attr('.uml-class-attrs-rect/height')) || 40;
-        const methsH = parseFloat(model.attr('.uml-class-methods-rect/height')) || 40;
+        // límites de zonas a partir de las líneas
+        const bbox   = model.getBBox();
+        const relY   = y - bbox.y;
 
-        const name = model.get('name');
-        if (name!='Entidad') return;
+        const nameH  = this.NAME_H;
+        const sep1Y  = parseFloat(model.attr('.sep-name/y1'))  || (nameH + 0.5);
+        const sep2Y  = parseFloat(model.attr('.sep-attrs/y1')) || (nameH + 40 + 0.5); // fallback
 
         let field: 'name' | 'attributes' | 'methods' | null = null;
+        if (relY < sep1Y) field = 'name';
+        else if (relY < sep2Y) field = 'attributes';
+        else field = 'methods';
 
-        // Ajusta si cambiaste las alturas (30 / 40 / 40)
-        if (relativeY < nameH) {
-          field = 'name';
-        } else if (relativeY < nameH + attrsH) {
-          field = 'attributes';
-        } else if (relativeY < nameH + attrsH + methsH) {
-          field = 'methods';
-        }
-        
         if (field) this.startEditing(model, field, x, y);
       });
+
 
       //👉 Doble clic en una relación para editar su etiqueta
       this.paper.on('link:pointerdblclick',(linkView: any, evt: MouseEvent, x: number, y: number) => {
@@ -163,10 +159,6 @@ export class DiagramService {
       });
 
 
-
-
-
-      
       console.log('JointJS inicializado correctamente');
       return Promise.resolve();
     } catch (error) {
@@ -183,7 +175,7 @@ export class DiagramService {
     // Mapa de selectores correctos en tu shape
     const SELECTOR_MAP: Record<typeof field, string> = {
       name: '.uml-class-name-text',
-      attributes: '.uml-class-attrs-text',   // OJO: 'attrs'
+      attributes: '.uml-class-attrs-text',   
       methods: '.uml-class-methods-text'
     };
 
@@ -230,11 +222,7 @@ export class DiagramService {
         const newValue = (field === 'name') ? raw.trim() : raw.replace(/\r?\n/g, '\n');
 
         model.attr(`${selector}/text`, newValue);
-
-        // 👇 Ajusta alturas según nuevas líneas
-        if (field === 'attributes' || field === 'methods') {
-          this.autoResizeUmlClass(model);
-        }
+        this.scheduleAutoResize(model);
       }
 
       if (editor.parentNode) editor.parentNode.removeChild(editor);
@@ -362,23 +350,15 @@ export class DiagramService {
   }
 
   clearSelection(): void {
-    if (this.selectedCell) {
-      if (this.selectedCell.isElement && this.selectedCell.isElement()) {
-        // 🔹 Restaurar estilo
-        this.selectedCell.attr('.uml-class-name-rect/stroke', '#2196f3');
-        this.selectedCell.attr('.uml-class-attrs-rect/stroke', '#2196f3');
-        this.selectedCell.attr('.uml-class-methods-rect/stroke', '#2196f3');
-        this.selectedCell.attr('.uml-class-name-rect/stroke-width', 2);
-
-        // 🔹 Ocultar puertos (solo si es Element)
-        this.selectedCell.getPorts().forEach((p: any) => {
-          this.selectedCell.portProp(p.id, 'attrs/circle/display', 'none');
-        });
-      }
-
-      // Reset selección para cualquier tipo (Element o Link)
-      this.selectedCell = null;
+    if (this.selectedCell?.isElement?.()) {
+      this.selectedCell.attr('.uml-outer/stroke', '#2196f3');
+      this.selectedCell.attr('.uml-outer/stroke-width', 2);
+      this.selectedCell.getPorts().forEach((p: any) => {
+        this.selectedCell.portProp(p.id, 'attrs/circle/display', 'none');
+      });
     }
+    this.selectedCell = null;
+
   }
 
   private getClickedLabelIndex(linkView: any, evt: MouseEvent): number | null {
@@ -399,25 +379,17 @@ export class DiagramService {
 
   private getTextBBox(model: any, selector: string): number {
     const view = this.paper.findViewByModel(model);
-    if (!view) return 0;
-
-    const node = view.findBySelector(selector)[0] as SVGGraphicsElement;
-    if (node) {
-      const bbox = node.getBBox();
-      return bbox.height;
-    }
-    return 0;
+    const node = view?.findBySelector(selector)?.[0] as SVGGraphicsElement | undefined;
+    try { return node ? node.getBBox().height : 0; } catch { return 0; }
   }
 
   private updatePorts(model: any) {
-    if (!model || !model.isElement()) return;
-
+    if (!model?.isElement?.()) return;
     const { width, height } = model.size();
-
-    model.portProp('top', 'args', { x: width / 2, y: 0 });
+    model.portProp('top',    'args', { x: width / 2, y: 0 });
     model.portProp('bottom', 'args', { x: width / 2, y: height });
-    model.portProp('left', 'args', { x: 0, y: height / 2 });
-    model.portProp('right', 'args', { x: width, y: height / 2 });
+    model.portProp('left',   'args', { x: 0,        y: height / 2 });
+    model.portProp('right',  'args', { x: width,    y: height / 2 });
   }
 
 
@@ -462,16 +434,6 @@ export class DiagramService {
         attributes: attributesText,
         methods: methodsText
       });
-      
-
-      umlClass.on('change:attrs', () => {
-        // Recalcular solo si cambian los textos que nos interesan
-        const a = umlClass.attr('.uml-class-attrs-text/text');
-        const m = umlClass.attr('.uml-class-methods-text/text');
-        // (Llamar siempre es simple y seguro)
-        this.autoResizeUmlClass(umlClass);
-      });
-
 
       // 🔹 Añadimos 4 puertos (uno por cada lado)
       umlClass.addPort({ group: 'inout', id: 'top' });
@@ -479,9 +441,12 @@ export class DiagramService {
       umlClass.addPort({ group: 'inout', id: 'left' });
       umlClass.addPort({ group: 'inout', id: 'right' });
 
-      this.graph.addCell(umlClass);
-      this.autoResizeUmlClass(umlClass); // 👈 ahora ajusta tamaño + puertos
+      umlClass.on('change:size',  () => this.updatePorts(umlClass));
+      umlClass.on('change:attrs', () => this.scheduleAutoResize(umlClass));
 
+      this.graph.addCell(umlClass);
+      this.scheduleAutoResize(umlClass);      // ✅ tamaño inicial
+      umlClass.toFront();
 
       return umlClass;
 
@@ -526,83 +491,62 @@ export class DiagramService {
       attributes: '',
       methods: '',
       attrs: {
-        rect: { strokeWidth: 2, stroke: '#2196f3', fill: '#ffffff' },
-
-        '.uml-class-name-rect': {
-          refWidth: '100%', height: 30, fill: '#e3f2fd', stroke: '#2196f3'
-        },
-        '.uml-class-attrs-rect': {
-          refY: 30, refWidth: '100%', height: 40, fill: '#ffffff', stroke: '#2196f3'
-        },
-        '.uml-class-methods-rect': {
-          refY: 70, refWidth: '100%', height: 40, fill: '#ffffff', stroke: '#2196f3'
+        // Borde exterior único
+        '.uml-outer': {
+          strokeWidth: 2, stroke: '#2196f3', fill: '#ffffff',
+          width: '100%', height: '100%'
         },
 
+        // Header sin stroke (solo fondo)
+        '.uml-class-name-rect': { refWidth: '100%', height: 30, fill: '#e3f2fd' },
+
+        // Separadores como líneas de 1px nítidas
+        '.sep-name':  { stroke: '#2196f3', strokeWidth: 1, shapeRendering: 'crispEdges' },
+        '.sep-attrs': { stroke: '#2196f3', strokeWidth: 1, shapeRendering: 'crispEdges' },
+
+        // Textos
         '.uml-class-name-text': {
-          ref: '.uml-class-name-rect',
-          refY: .5, refX: .5,
-          textAnchor: 'middle',
-          yAlignment: 'middle',
-          fontWeight: 'bold',
-          fontSize: 14,
-          fill: '#000000',
-          text: 'Entidad'
+          ref: '.uml-class-name-rect', refY: .5, refX: .5,
+          textAnchor: 'middle', yAlignment: 'middle',
+          fontWeight: 'bold', fontSize: 14, fill: '#000', text: 'Entidad'
         },
         '.uml-class-attrs-text': {
-          ref: '.uml-class-attrs-rect',
-          refY: 10, refX: 10,
-          textAnchor: 'start',
-          fontSize: 12,
-          fill: '#000000',
-          text: '',
-          textWrap: { width: -20, height: 'auto' }, // ancho ≈ (width - 20px de márgenes)
-          whiteSpace: 'pre-wrap'
+          fontSize: 12, fill: '#000', text: '',
+          textWrap: { width: -20, height: 'auto' }, whiteSpace: 'pre-wrap'
         },
         '.uml-class-methods-text': {
-          ref: '.uml-class-methods-rect',
-          refY: 10, refX: 10,
-          textAnchor: 'start',
-          fontSize: 12,
-          fill: '#000000',
-          text: '',
-          textWrap: { width: -20, height: 'auto' },
-          whiteSpace: 'pre-wrap'
+          fontSize: 12, fill: '#000', text: '',
+          textWrap: { width: -20, height: 'auto' }, whiteSpace: 'pre-wrap'
         }
-      },
-        ports: {
-          groups: {
-          inout: {
-            position: { name: 'boundary' }, // 👈 siempre en borde
-            attrs: {
-              circle: {
-                r: 5,
-                magnet: true,
-                stroke: '#2196f3',
-                fill: '#fff',
-                'stroke-width': 2,
-                display: 'none'
-              }
-            }
-          }
-        }
-      
       },
 
+      ports: {
+        groups: {
+          inout: {
+            position: { name: 'absolute' },
+            attrs: { circle: { r: 5, magnet: true, stroke: '#2196f3', fill: '#fff', 'stroke-width': 2, display: 'none' } }
+          }
+        }
+      }
     }, {
       markup: [
         '<g class="rotatable">',
-          '<g class="scalable">',
-            '<rect class="uml-class-name-rect"/>',
-            '<rect class="uml-class-attrs-rect"/>',
-            '<rect class="uml-class-methods-rect"/>',
+          '<g class="scalable">',                 // ⬅️ solo el borde
+            '<rect class="uml-outer"/>',
           '</g>',
+          '<rect class="uml-class-name-rect"/>',  // ⬅️ fuera del scalable
+          '<line class="sep-name"/>',             // ⬅️ fuera
+          '<line class="sep-attrs"/>',            // ⬅️ fuera
           '<text class="uml-class-name-text"/>',
           '<text class="uml-class-attrs-text"/>',
           '<text class="uml-class-methods-text"/>',
-          '<g class="ports"/>',  // 👈 contenedor de puertos
+          '<g class="ports"/>',
         '</g>'
-      ].join(''),
+      ].join('')
+
+
     });
+
 
     // 🔹 Método updateRectangles para refrescar textos
     this.joint.shapes.custom.UMLClass.prototype.updateRectangles = function() {
@@ -623,40 +567,50 @@ export class DiagramService {
 
   // === Ajusta alto de compartimentos y del elemento según el texto ===
   private autoResizeUmlClass = (model: any) => {
-    if (!model || !model.isElement()) return;
+    if (!model?.isElement?.()) return;
 
-    const NAME_H = 30;     // altura fija para nombre
-    const LINE_H = 18;     // altura aproximada de línea de texto
-    const PAD_V = 10;      // padding extra arriba/abajo
-    const FIXED_W = 180;   // 👈 ancho fijo estándar
+    const width  = Math.max(this.MIN_W, (model.get('size')?.width) || this.MIN_W);
+    const nameH  = this.NAME_H;
+    const padV   = this.PAD_V;
 
-    // Leer textos actuales
-    const attrsText = (model.attr('.uml-class-attrs-text/text') || '') as string;
-    const methsText = (model.attr('.uml-class-methods-text/text') || '') as string;
+    const attrsHText = this.getTextBBox(model, '.uml-class-attrs-text');
+    const methsHText = this.getTextBBox(model, '.uml-class-methods-text');
 
-    const attrsLines = Math.max(1, attrsText.split('\n').length);
-    const methsLines = Math.max(1, methsText.split('\n').length);
+    const attrsH = Math.max(this.MIN_ATTRS_H, Math.round((attrsHText || 0) + padV));
+    const methsH = Math.max(this.MIN_METHS_H, Math.round((methsHText || 0) + padV));
+    const totalH = Math.round(nameH + attrsH + methsH);
 
-    // Calcular alturas dinámicas
-    const ATTRS_H = attrsLines * LINE_H + PAD_V;
-    const METHS_H = methsLines * LINE_H + PAD_V;
+    // header
+    model.attr('.uml-class-name-rect/height', nameH);
+    model.attr('.uml-class-name-rect/refWidth', '100%'); // por si no lo tenías
 
-    // Ajustar rectángulos
-    model.attr('.uml-class-name-rect/height', NAME_H);
-    model.attr('.uml-class-attrs-rect/height', ATTRS_H);
-    model.attr('.uml-class-methods-rect/height', METHS_H);
+    // separadores (1px nítidos)
+    const x1 = 1, x2 = width - 1;         // dentro del borde 2px
+    const y1 = Math.round(nameH) + 0.5;   // fin header
+    const y2 = Math.round(nameH + attrsH) + 0.5; // fin atributos
 
-    model.attr('.uml-class-attrs-rect/refY', NAME_H);
-    model.attr('.uml-class-methods-rect/refY', NAME_H + ATTRS_H);
+    model.attr({
+      '.sep-name':  { x1, y1, x2, y2: y1 },
+      '.sep-attrs': { x1, y1: y2, x2, y2 }
+    });
 
-    // Calcular altura total
-    const totalH = NAME_H + ATTRS_H + METHS_H;
+    // textos
+    model.attr('.uml-class-attrs-text/transform',  `translate(10, ${Math.round(nameH + 10)})`);
+    model.attr('.uml-class-attrs-text/textWrap/width', width - 20);
 
-    // 👇 Redimensionar con ancho fijo
-    model.resize(FIXED_W, totalH);
+    model.attr('.uml-class-methods-text/transform', `translate(10, ${Math.round(nameH + attrsH + 10)})`);
+    model.attr('.uml-class-methods-text/textWrap/width', width - 20);
 
-    // Reajustar puertos al borde del nuevo tamaño
+    // tamaño + puertos
+    model.resize(width, totalH);
     this.updatePorts(model);
   };
+
+  // Llama a autoResize cuando el SVG ya se re-pintó (2 frames)
+  private scheduleAutoResize(model: any) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => this.autoResizeUmlClass(model));
+    });
+  }
 
 }
