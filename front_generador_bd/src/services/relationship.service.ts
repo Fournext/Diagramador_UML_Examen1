@@ -52,7 +52,7 @@ export class RelationshipService {
   private createTypedRelationship(sourceId: string, targetId: string, type: string) {
     switch (type) {
       case 'association':
-        this.diagramService.createRelationship(sourceId, targetId, '1:n');
+        this.diagramService.createRelationship(sourceId, targetId);
         break;
 
       case 'generalization': // Herencia
@@ -131,7 +131,7 @@ export class RelationshipService {
 
       default:
         console.warn(`Tipo de relación desconocido: ${type}, usando asociación.`);
-        this.diagramService.createRelationship(sourceId, targetId, '1:n');
+        this.diagramService.createRelationship(sourceId, targetId);
     }
   }
 

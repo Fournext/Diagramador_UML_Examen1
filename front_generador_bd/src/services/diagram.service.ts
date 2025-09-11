@@ -1,6 +1,9 @@
 import { Injectable } from '@angular/core';
 import { UmlClass } from '../models/uml-class.model';
 import { EditionService } from './edition.service';
+import { v4 as uuid } from 'uuid';
+import { CollaborationService } from './colaboration/collaboration.service';
+import { RemoteApplicationService } from './colaboration/remote-application.service';
 
 @Injectable({
   providedIn: 'root'
@@ -10,7 +13,11 @@ export class DiagramService {
   private graph: any;
   private paper: any;
   private selectedCell: any = null;
-  constructor(private edition: EditionService /* ... */) {}
+  constructor(
+    private edition: EditionService,
+    private collab: CollaborationService
+  ) {}
+
 
   // === Constantes de tamaño mínimo ===
   private readonly MIN_W = 180;   // tu ancho estándar inicial
@@ -19,7 +26,7 @@ export class DiagramService {
   private readonly MIN_METHS_H = 40;
   private readonly PAD_V = 10;    // padding vertical extra
 
-
+  
   /**
    * Inicializa JointJS y configura el papel y grafo
    */
@@ -39,23 +46,38 @@ export class DiagramService {
         height: 600,
         gridSize: 10,
         drawGrid: true,
-        interactive: {
-          elementMove: true,
-          addLinkFromMagnet: true, 
-          //vertexAdd: false //quitar vertice para mover linea
-        },
+        interactive: { elementMove: true, addLinkFromMagnet: true },
         background: { color: '#f8f9fa' },
         defaultConnector: { name: 'rounded' },
         defaultLink: () => this.buildRelationship(),
-
-        validateConnection: (cellViewS: any, magnetS: any, cellViewT: any, magnetT: any) => {
-          return (cellViewS !== cellViewT);
-        }
+        validateConnection: (cvS: any, _mS: any, cvT: any, _mT: any) => cvS !== cvT
       });
 
       /**************************************************************************************************
       *                   EVENTOS INTERACTIVOS EN EL PAPER
       ***************************************************************************************************/ 
+      //👉 Difundir movimiento y redimensionamiento
+      this.paper.on('link:connect', (linkView: any) => {
+        const link = linkView.model;
+        const src = link.get('source')?.id;
+        const trg = link.get('target')?.id;
+        if (src && trg) {
+          this.collab.broadcast({ t: 'add_link', id: link.id, sourceId: src, targetId: trg });
+        }
+      });
+
+      this.paper.on('element:pointerup', (view: any) => {
+        const m = view.model;
+        const p = m.position();
+        this.collab.broadcast({ t: 'move', id: m.id, x: p.x, y: p.y });
+      });
+
+      // Si tienes resize interactivo, algo como:
+      this.paper.on('element:resize:pointerup', (view: any) => {
+        const m = view.model;
+        const s = m.size();
+        this.collab.broadcast({ t: 'resize', id: m.id, w: s.width, h: s.height });
+      });
 
       //Seleccionar Una clase UML
       this.paper.on('cell:pointerclick', (cellView: any) => {
@@ -66,97 +88,82 @@ export class DiagramService {
             this.selectedCell.portProp(p.id, 'attrs/circle/display', 'none');
           });
         }
-
         this.selectedCell = cellView.model;
-
         if (this.selectedCell?.isElement?.()) {
-          this.selectedCell.attr('.uml-outer/stroke', '#ff9800');   // highlight
+          this.selectedCell.attr('.uml-outer/stroke', '#ff9800');
           this.selectedCell.attr('.uml-outer/stroke-width', 2);
           this.selectedCell.getPorts().forEach((p: any) => {
             this.selectedCell.portProp(p.id, 'attrs/circle/display', 'block');
           });
         }
-
       });
 
 
       //👉 Deselect al hacer click en el fondo
-      this.paper.on('blank:pointerclick', () => {
-        this.clearSelection();
-      });
+      this.paper.on('blank:pointerclick', () => this.clearSelection());
 
-      this.paper.on('cell:pointerdblclick', (cellView: any, evt: any, x: number, y: number) => {
+      this.paper.on('cell:pointerdblclick', (cellView: any, _evt: any, x: number, y: number) => {
         this.clearSelection();
         const model = cellView.model;
         if (!model?.isElement?.()) return;
 
-        // límites de zonas a partir de las líneas
-        const bbox   = model.getBBox();
-        const relY   = y - bbox.y;
+        // lee posiciones de separadores (puestas por autoResize)
+        const bbox = model.getBBox();
+        const relY = y - bbox.y;
+        const sep1 = parseFloat(model.attr('.sep-name/y1'))  || (this.edition.NAME_H + 0.5);
+        const sep2 = parseFloat(model.attr('.sep-attrs/y1')) || (this.edition.NAME_H + 40 + 0.5);
 
-        const nameH  = this.NAME_H;
-        const sep1Y  = parseFloat(model.attr('.sep-name/y1'))  || (nameH + 0.5);
-        const sep2Y  = parseFloat(model.attr('.sep-attrs/y1')) || (nameH + 40 + 0.5); // fallback
+        let field: 'name' | 'attributes' | 'methods' = 'methods';
+        if (relY < sep1) field = 'name';
+        else if (relY < sep2) field = 'attributes';
 
-        let field: 'name' | 'attributes' | 'methods' | null = null;
-        if (relY < sep1Y) field = 'name';
-        else if (relY < sep2Y) field = 'attributes';
-        else field = 'methods';
-
-        //if (field) this.startEditing(model, field, x, y);
-        if (field) this.edition.startEditing(model, this.paper, field, x, y);
+        this.edition.startEditing(model, this.paper, field, x, y, this.collab);
       });
 
 
       //👉 Doble clic en una relación para editar su etiqueta
-      this.paper.on('link:pointerdblclick',(linkView: any, evt: MouseEvent, x: number, y: number) => {
-          const model = linkView.model;
-          const labelIndex = this.getClickedLabelIndex(linkView, evt);
+       this.paper.on('link:pointerdblclick', (linkView: any, evt: MouseEvent, x: number, y: number) => {
+        const model = linkView.model;
+        if (model.get('name') !== 'Relacion') return;
 
-          const name = model.get('name');
-          if (name!="Relacion") return;
-          if (labelIndex === null) return; // no fue sobre una etiqueta
+        const labelIndex = this.getClickedLabelIndex(linkView, evt);
+        if (labelIndex === null) return;
 
-          // 🔹 Abrir editor solo si fue sobre un label
-          const label = model.label(labelIndex);
-          const currentValue = label?.attrs?.text?.text || '';
-          this.edition.startEditingLabel(model, this.paper, labelIndex, currentValue, x, y);
+        const label = model.label(labelIndex);
+        const currentValue = label?.attrs?.text?.text || '';
+        this.edition.startEditingLabel(model, this.paper, labelIndex, currentValue, x, y, this.collab);
 
-          // Opcional: resaltar visualmente el label en edición
-          const labelNode = linkView.findLabelNode(labelIndex) as SVGElement;
-          if (labelNode) {
-            labelNode.setAttribute('stroke', '#2196f3');
-            labelNode.setAttribute('stroke-width', '1');
-          }
-        }
-      );
+        const node = linkView.findLabelNode(labelIndex) as SVGElement;
+        if (node) { node.setAttribute('stroke', '#2196f3'); node.setAttribute('stroke-width', '1'); }
+      });
 
       //👉 Clic derecho en una relación para añadir una nueva etiqueta
       this.paper.on('link:contextmenu', (linkView: any, evt: MouseEvent, x: number, y: number) => {
         evt.preventDefault();
-
-        // ¿El click derecho fue sobre una etiqueta?
         const labelIndex = this.getClickedLabelIndex(linkView, evt);
         if (labelIndex !== null) {
-          // 👉 eliminar la etiqueta directamente
           linkView.model.removeLabel(labelIndex);
+          this.collab.broadcast({ t: 'del_label', id: linkView.model.id, index: labelIndex });
           return;
         }
-
-        // 👉 si no fue sobre una etiqueta, agregamos una nueva
         const model = linkView.model;
         const newLabel = {
           position: { distance: linkView.getClosestPoint(x, y).ratio, offset: -10 },
           attrs: { text: { text: 'label', fill: '#333', fontSize: 12 } }
         };
         model.appendLabel(newLabel);
-
-        // Abrir editor inmediatamente
-        const newIndex = model.labels().length - 1;
-        this.edition.startEditingLabel(model, this.paper, newIndex, 'label', x, y);
+        const idx = model.labels().length - 1;
+        this.edition.startEditingLabel(model, this.paper, idx, 'label', x, y, this.collab);
       });
 
-
+      // 👉 inicializa colaboración **ANTES** de salir
+      this.collab.registerDiagramApi({
+        getGraph: () => this.graph,
+        getJoint: () => this.joint,
+        createUmlClass: (payload) => this.createUmlClass(payload),
+        buildLinkForRemote: this.buildLinkForRemote
+      });
+      this.collab.init('room-123');
       console.log('JointJS inicializado correctamente');
       return Promise.resolve();
     } catch (error) {
@@ -170,9 +177,10 @@ export class DiagramService {
   ***************************************************************************************************/ 
   
   // Crea una relación entre dos elementos y la añade al grafo
-  createRelationship(sourceId: string, targetId: string, labelText: string = '1:n'): any {
+  createRelationship(sourceId: string, targetId: string) {
     const link = this.buildRelationship(sourceId, targetId);
     this.graph.addCell(link);
+    this.collab.broadcast({ t: 'add_link', id: link.id, sourceId: sourceId, targetId: targetId });
     return link;
   }
 
@@ -187,8 +195,8 @@ export class DiagramService {
         '.marker-target': { fill: '#333333', d: 'M 10 0 L 0 5 L 10 10 z' }
       },
       labels: [
-        { position: { distance: 20, offset: -10 }, attrs: { text: { text: '0..1', fill: '#333' } } }, // origen
-        { position: { distance: -20, offset: -10 }, attrs: { text: { text: '1..*', fill: '#333' } } } // destino
+        { position: { distance: 20, offset: -10 }, attrs: { text: { text: '0..1', fill: '#333' } } },
+        { position: { distance: -20, offset: -10 }, attrs: { text: { text: '1..*', fill: '#333' } } }
       ]
     });
   }
@@ -197,14 +205,15 @@ export class DiagramService {
   *                  FUNCIONES AUXILIARES
   ***************************************************************************************************/ 
 
-  deleteSelected(): void {
-    if (this.selectedCell) {
-      this.selectedCell.remove();
-      this.selectedCell = null;
-    }
+  deleteSelected() {
+    if (!this.selectedCell) return;
+    const id = this.selectedCell.id;
+    this.selectedCell.remove();
+    this.collab.broadcast({ t: 'delete', id });
+    this.selectedCell = null;
   }
 
-  clearSelection(): void {
+  clearSelection() {
     if (this.selectedCell?.isElement?.()) {
       this.selectedCell.attr('.uml-outer/stroke', '#2196f3');
       this.selectedCell.attr('.uml-outer/stroke-width', 2);
@@ -213,24 +222,17 @@ export class DiagramService {
       });
     }
     this.selectedCell = null;
-
   }
 
   // ========= Obtener índice de etiqueta clicada =========
   private getClickedLabelIndex(linkView: any, evt: MouseEvent): number | null {
     const labels = linkView.model.labels();
     if (!labels || labels.length === 0) return null;
-
     for (let i = 0; i < labels.length; i++) {
-      const labelNode = linkView.findLabelNode(i);
-
-      // Verificar si el target o alguno de sus ancestros pertenece al nodo del label
-      if (labelNode && (evt.target === labelNode || labelNode.contains(evt.target as Node))) {
-        return i;
-      }
+      const node = linkView.findLabelNode(i);
+      if (node && (evt.target === node || node.contains(evt.target as Node))) return i;
     }
-
-    return null; // 👉 No fue sobre una etiqueta
+    return null;
   }
 
   /**************************************************************************************************
@@ -238,7 +240,7 @@ export class DiagramService {
   ***************************************************************************************************/ 
 
   // ========= Crea una clase UML con la estructura de tres compartimentos =========
-  createUmlClass(classModel: UmlClass): any {
+  createUmlClass(classModel: UmlClass, remote: boolean = false): any {
     try {
       if (!this.joint || !this.graph) {
         throw new Error('JointJS no está inicializado');
@@ -247,26 +249,34 @@ export class DiagramService {
       // 👇 Forzar la creación del namespace custom
       this.createUmlNamespace();
 
-      const attributesText = classModel.attributes
-        .map(attr => `${attr.name}: ${attr.type}`)
-        .join('\n');
+      // 🔹 Normalizar atributos/métodos a texto multilinea
+      const attributesText = Array.isArray(classModel.attributes)
+        ? classModel.attributes.map(a => `${a.name}: ${a.type}`).join('\n')
+        : (classModel.attributes || '');
 
-      const methodsText = classModel.methods
-        .map(method => {
-          const params = method.parameters ? `(${method.parameters})` : '()';
-          const returnType = method.returnType ? `: ${method.returnType}` : '';
-          return `${method.name}${params}${returnType}`;
-        })
-        .join('\n');
+      const methodsText = Array.isArray(classModel.methods)
+        ? classModel.methods.map(m => {
+            const params = m.parameters ? `(${m.parameters})` : '()';
+            const ret = m.returnType ? `: ${m.returnType}` : '';
+            return `${m.name}${params}${ret}`;
+          }).join('\n')
+        : (classModel.methods || '');
 
       // 👇 Usar la clase custom
       const umlClass = new this.joint.shapes.custom.UMLClass({
         position: classModel.position,
         size: classModel.size || { width: 180, height: 110 },
-        name: classModel.name,
+        name: classModel.name || 'Entidad',
         attributes: attributesText,
         methods: methodsText
       });
+
+      // 🔹 Asignar ID remoto si viene del payload
+      if (classModel.id) {
+        umlClass.set('id', classModel.id);
+      } else {
+        umlClass.set('id', uuid());
+      }
 
       // 🔹 Añadimos 4 puertos (uno por cada lado)
       umlClass.addPort({ group: 'inout', id: 'top' });
@@ -275,11 +285,27 @@ export class DiagramService {
       umlClass.addPort({ group: 'inout', id: 'right' });
 
       umlClass.on('change:size',  () => this.edition.updatePorts(umlClass));
-      umlClass.on('change:attrs', () => this.edition.scheduleAutoResize(this.paper,umlClass));
+      umlClass.on('change:attrs', () => this.edition.scheduleAutoResize(this.paper, umlClass));
 
+      // 🔹 Añadir al grafo SOLO UNA VEZ
       this.graph.addCell(umlClass);
-      this.edition.scheduleAutoResize(this.paper, umlClass);      // ✅ tamaño inicial
+      this.edition.scheduleAutoResize(umlClass, this.paper);
       umlClass.toFront();
+
+      // 🔹 Difundir creación SOLO si fue local
+      if (!remote) {
+        this.collab.broadcast({
+          t: 'add_class',
+          id: umlClass.id,
+          payload: {
+            name: classModel.name,
+            position: classModel.position,
+            size: classModel.size,
+            attributes: classModel.attributes,
+            methods: classModel.methods
+          }
+        });
+      }
 
       return umlClass;
 
@@ -288,6 +314,7 @@ export class DiagramService {
       throw error;
     }
   }
+
   
   // ========= Configura los eventos interactivos para un elemento =========
   setupClassInteraction(element: any): void {
@@ -309,47 +336,27 @@ export class DiagramService {
   // ========= Crea un namespace UML personalizado si no existe en JointJS =========
   private createUmlNamespace(): void {
     if (!this.joint) return;
-    if (this.joint.shapes.custom && this.joint.shapes.custom.UMLClass) {
-      return;
-    }
+    if (this.joint.shapes.custom?.UMLClass) return;
 
     this.joint.shapes.custom = this.joint.shapes.custom || {};
-
     this.joint.shapes.custom.UMLClass = this.joint.dia.Element.define('custom.UMLClass', {
       size: { width: 180, height: 110 },
       name: 'Entidad',
       attributes: '',
       methods: '',
       attrs: {
-        // Borde exterior único
-        '.uml-outer': {
-          strokeWidth: 2, stroke: '#2196f3', fill: '#ffffff',
-          width: '100%', height: '100%'
-        },
-
-        // Header sin stroke (solo fondo)
+        '.uml-outer': { strokeWidth: 2, stroke: '#2196f3', fill: '#ffffff', width: '100%', height: '100%' },
         '.uml-class-name-rect': { refWidth: '100%', height: 30, fill: '#e3f2fd' },
-
-        // Separadores como líneas de 1px nítidas
         '.sep-name':  { stroke: '#2196f3', strokeWidth: 1, shapeRendering: 'crispEdges' },
         '.sep-attrs': { stroke: '#2196f3', strokeWidth: 1, shapeRendering: 'crispEdges' },
-
-        // Textos
         '.uml-class-name-text': {
           ref: '.uml-class-name-rect', refY: .5, refX: .5,
           textAnchor: 'middle', yAlignment: 'middle',
           fontWeight: 'bold', fontSize: 14, fill: '#000', text: 'Entidad'
         },
-        '.uml-class-attrs-text': {
-          fontSize: 12, fill: '#000', text: '',
-          textWrap: { width: -20, height: 'auto' }, whiteSpace: 'pre-wrap'
-        },
-        '.uml-class-methods-text': {
-          fontSize: 12, fill: '#000', text: '',
-          textWrap: { width: -20, height: 'auto' }, whiteSpace: 'pre-wrap'
-        }
+        '.uml-class-attrs-text': { fontSize: 12, fill: '#000', text: '', textWrap: { width: -20, height: 'auto' }, whiteSpace: 'pre-wrap' },
+        '.uml-class-methods-text': { fontSize: 12, fill: '#000', text: '', textWrap: { width: -20, height: 'auto' }, whiteSpace: 'pre-wrap' }
       },
-
       ports: {
         groups: {
           inout: {
@@ -361,35 +368,52 @@ export class DiagramService {
     }, {
       markup: [
         '<g class="rotatable">',
-          '<g class="scalable">',                 // ⬅️ solo el borde
+          '<g class="scalable">',
             '<rect class="uml-outer"/>',
           '</g>',
-          '<rect class="uml-class-name-rect"/>',  // ⬅️ fuera del scalable
-          '<line class="sep-name"/>',             // ⬅️ fuera
-          '<line class="sep-attrs"/>',            // ⬅️ fuera
+          '<rect class="uml-class-name-rect"/>',
+          '<line class="sep-name"/>',
+          '<line class="sep-attrs"/>',
           '<text class="uml-class-name-text"/>',
           '<text class="uml-class-attrs-text"/>',
           '<text class="uml-class-methods-text"/>',
           '<g class="ports"/>',
         '</g>'
       ].join('')
-
-
     });
 
-    // 🔹 Método updateRectangles para refrescar textos
-    this.joint.shapes.custom.UMLClass.prototype.updateRectangles = function() {
+    // Sync textos → attrs
+    this.joint.shapes.custom.UMLClass.prototype.updateRectangles = function () {
       this.attr({
         '.uml-class-name-text': { text: this.get('name') || '' },
         '.uml-class-attrs-text': { text: this.get('attributes') || '' },
         '.uml-class-methods-text': { text: this.get('methods') || '' }
       });
     };
-
-    this.joint.shapes.custom.UMLClass.prototype.initialize = function() {
+    this.joint.shapes.custom.UMLClass.prototype.initialize = function () {
       this.on('change:name change:attributes change:methods', this.updateRectangles, this);
       this.updateRectangles();
       this.constructor.__super__.initialize.apply(this, arguments);
-    }; 
+    };
   }
+
+
+  private buildLinkForRemote = (sourceId?: string, targetId?: string) =>
+  new this.joint.dia.Link({
+    name: 'Relacion',
+    source: sourceId ? { id: sourceId } : undefined,
+    target: targetId ? { id: targetId } : undefined,
+    attrs: {
+      '.connection': { stroke: '#333333', 'stroke-width': 2 },
+      '.marker-target': { fill: '#333333', d: 'M 10 0 L 0 5 L 10 10 z' }
+    },
+    labels: [
+      { position: { distance: 20,  offset: -10 }, attrs: { text: { text: '0..1', fill: '#333' } } },
+      { position: { distance: -20, offset: -10 }, attrs: { text: { text: '1..*', fill: '#333' } } }
+    ]
+  });
+
+  // Expose para otros servicios (collab)
+  getGraph() { return this.graph; }
+  getJoint() { return this.joint; }
 }

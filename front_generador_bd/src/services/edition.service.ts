@@ -1,4 +1,8 @@
 import { Injectable } from '@angular/core';
+import { v4 as uuid } from 'uuid';
+import { CollaborationService } from './colaboration/collaboration.service';
+
+
 
 @Injectable({ providedIn: 'root' })
 export class EditionService {
@@ -7,71 +11,101 @@ export class EditionService {
   readonly MIN_ATTRS_H = 40;
   readonly MIN_METHS_H = 40;
   readonly PAD_V = 10;
-
   // ========= Edición de campos =========
-  startEditing(model: any, paper: any, field: 'name'|'attributes'|'methods', x: number, y: number) {
-    const MAP = {
+  startEditing(
+    model: any,
+    paper: any,
+    field: 'name' | 'attributes' | 'methods',
+    x: number,
+    y: number,
+    collab?: { broadcast: (msg: any) => void }
+  ) {
+    const MAP: Record<typeof field, string> = {
       name: '.uml-class-name-text',
       attributes: '.uml-class-attrs-text',
       methods: '.uml-class-methods-text'
-    } as const;
+    };
     const selector = MAP[field];
-    const current = model.attr(`${selector}/text`) || '';
+    const currentValue = model.attr(`${selector}/text`) || '';
 
-    const rect = paper.el.getBoundingClientRect();
+    const paperRect = paper.el.getBoundingClientRect();
     const bbox = model.getBBox();
-    const editor = (field === 'name') ? document.createElement('input') : document.createElement('textarea');
-    editor.value = current;
+    const absX = paperRect.left + x;
+    const absY = paperRect.top + y;
+
+    const editor = field === 'name'
+      ? document.createElement('input')
+      : document.createElement('textarea');
+
+    editor.value = currentValue;
     Object.assign(editor.style, {
       position: 'absolute',
-      left: `${rect.left + x}px`,
-      top: `${rect.top + y}px`,
+      left: `${absX}px`,
+      top: `${absY}px`,
       border: '1px solid #2196f3',
       padding: '2px',
       zIndex: '1000',
       fontSize: '14px',
       background: '#fff',
-      minWidth: Math.max(120, bbox.width - 20) + 'px'
+      minWidth: `${Math.max(120, bbox.width - 20)}px`,
+      resize: field === 'name' ? 'none' : 'none'
     } as CSSStyleDeclaration);
-    if (field !== 'name') { (editor as HTMLTextAreaElement).rows = 4; editor.style.resize = 'none'; }
+
+    if (field !== 'name') (editor as HTMLTextAreaElement).rows = 4;
 
     document.body.appendChild(editor);
     editor.focus();
 
     let closed = false;
     const finish = (save: boolean) => {
-      if (closed) return; closed = true;
+      if (closed) return;
+      closed = true;
+
       if (save) {
         const raw = (editor as HTMLInputElement | HTMLTextAreaElement).value;
-        const val = (field === 'name') ? raw.trim() : raw.replace(/\r?\n/g, '\n');
-        model.attr(`${selector}/text`, val);
-        this.scheduleAutoResize(paper, model);
+        const newValue = field === 'name' ? raw.trim() : raw.replace(/\r?\n/g, '\n');
+        model.attr(`${selector}/text`, newValue);
+        
+        collab?.broadcast({ t: 'edit_text', id: model.id, field, value: newValue });
+        this.scheduleAutoResize(model, paper);
       }
       editor.parentNode && editor.parentNode.removeChild(editor);
     };
 
     editor.addEventListener('blur', () => finish(true));
-    editor.addEventListener('keydown', (e: Event) => {
-      const ke = e as KeyboardEvent;
-      if (field === 'name') {
-        if (ke.key === 'Enter') { ke.preventDefault(); finish(true); }
-        if (ke.key === 'Escape') { ke.preventDefault(); finish(false); }
-      } else {
-        if (ke.key === 'Enter' && !ke.shiftKey) { ke.preventDefault(); finish(true); }
-        if (ke.key === 'Escape') { ke.preventDefault(); finish(false); }
-      }
-    });
+      editor.addEventListener('keydown', (evt: Event) => {
+        const e = evt as KeyboardEvent;
+        if (field === 'name') {
+          if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+          if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+        } else {
+          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish(true); }
+          if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+        }
+      });
   }
   
   // ========= Edición de etiquetas de enlaces =========
-  startEditingLabel(model: any, paper: any, labelIndex: number, current: string, x: number, y: number) {
-    const rect = paper.el.getBoundingClientRect();
+  startEditingLabel(
+    model: any,
+    paper: any,
+    labelIndex: number,
+    currentValue: string,
+    x: number,
+    y: number,
+    collab?: { broadcast: (msg: any) => void }
+  ) {
+    const paperRect = paper.el.getBoundingClientRect();
+    const absX = paperRect.left + x;
+    const absY = paperRect.top + y;
+
     const input = document.createElement('input');
-    Object.assign(input, { value: current });
+    input.type = 'text';
+    input.value = currentValue;
     Object.assign(input.style, {
       position: 'absolute',
-      left: `${rect.left + x}px`,
-      top: `${rect.top + y}px`,
+      left: `${absX}px`,
+      top: `${absY}px`,
       border: '1px solid #2196f3',
       padding: '2px',
       zIndex: '1000',
@@ -83,36 +117,34 @@ export class EditionService {
     document.body.appendChild(input);
     input.focus();
 
-    let closed = false;
     const labelNode = (paper.findViewByModel(model) as any).findLabelNode(labelIndex) as SVGElement;
     if (labelNode) {
       labelNode.setAttribute('stroke', '#2196f3');
       labelNode.setAttribute('stroke-width', '1');
     }
 
-    const finish = (save: boolean) => {
-      if (closed) return;
-      closed = true;
-
-      if (save) {
-        model.label(labelIndex, {
-          ...model.label(labelIndex),
-          attrs: { text: { text: input.value.trim() } }
-        });
-      }
-
-      if (input.parentNode) input.parentNode.removeChild(input);
-
-      // quitar highlight
+    let closed = false;
+    const cleanupHighlight = () => {
       if (labelNode) {
         labelNode.removeAttribute('stroke');
         labelNode.removeAttribute('stroke-width');
       }
     };
+    const finish = (save: boolean) => {
+      if (closed) return;
+      closed = true;
 
-    // blur guarda
+      if (save) {
+        const text = input.value.trim();
+        model.label(labelIndex, { ...model.label(labelIndex), attrs: { text: { text } } });
+        collab?.broadcast({ t: 'edit_label', linkId: model.id, index: labelIndex, text });
+      }
+      if (labelNode) { labelNode.removeAttribute('stroke'); labelNode.removeAttribute('stroke-width'); }
+      input.parentNode && input.parentNode.removeChild(input);
+      cleanupHighlight();
+    };
+
     input.addEventListener('blur', () => finish(true));
-
     input.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === 'Escape' || e.key === ' ') {
         e.preventDefault();
@@ -130,8 +162,10 @@ export class EditionService {
     model.portProp('right',  'args', { x: width,    y: height / 2 });
   }
 
-  scheduleAutoResize(paper: any, model: any) {
-    requestAnimationFrame(() => requestAnimationFrame(() => this.autoResizeUmlClass(model, paper)));
+  scheduleAutoResize(model: any, paper: any) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => this.autoResizeUmlClass(model, paper));
+    });
   }
 
   /**************************************************************************************************
@@ -139,21 +173,21 @@ export class EditionService {
   ***************************************************************************************************/ 
 
   // ========= Auto-resize + puertos =========
-  private getTextBBox(paper: any, model: any, selector: string): number {
+  private getTextBBox(model: any, paper: any, selector: string): number {
     const view = paper.findViewByModel(model);
     const node = view?.findBySelector(selector)?.[0] as SVGGraphicsElement | undefined;
     try { return node ? node.getBBox().height : 0; } catch { return 0; }
   }
 
   // ========= Auto-ajusta el tamaño del diagrama UML de clase al contenido =========
-  private autoResizeUmlClass(model: any, paper: any) {
+  autoResizeUmlClass(model: any, paper: any) {
     if (!model?.isElement?.()) return;
 
-    const width = Math.max(this.MIN_W, (model.get('size')?.width) || this.MIN_W);
-    const nameH = this.NAME_H;
+    const width  = Math.max(this.MIN_W, (model.get('size')?.width) || this.MIN_W);
+    const nameH  = this.NAME_H;
 
-    const attrsHText = this.getTextBBox(paper, model, '.uml-class-attrs-text');
-    const methsHText = this.getTextBBox(paper, model, '.uml-class-methods-text');
+    const attrsHText = this.getTextBBox(model, paper, '.uml-class-attrs-text');
+    const methsHText = this.getTextBBox(model, paper, '.uml-class-methods-text');
 
     const attrsH = Math.max(this.MIN_ATTRS_H, Math.round((attrsHText || 0) + this.PAD_V));
     const methsH = Math.max(this.MIN_METHS_H, Math.round((methsHText || 0) + this.PAD_V));
@@ -172,6 +206,7 @@ export class EditionService {
 
     model.attr('.uml-class-attrs-text/transform',  `translate(10, ${Math.round(nameH + 10)})`);
     model.attr('.uml-class-attrs-text/textWrap/width', width - 20);
+
     model.attr('.uml-class-methods-text/transform', `translate(10, ${Math.round(nameH + attrsH + 10)})`);
     model.attr('.uml-class-methods-text/textWrap/width', width - 20);
 
