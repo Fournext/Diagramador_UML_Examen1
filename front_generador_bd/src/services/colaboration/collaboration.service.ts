@@ -76,92 +76,102 @@ export class CollaborationService {
         }
         case 'add_link': {
           if (graph.getCell(op.id)) break;
+          const type = op.payload?.type || 'association';
 
-          const link = this.api?.buildLinkForRemote?.(op.sourceId, op.targetId)
-                    ?? new joint.dia.Link({
-                          source: { id: op.sourceId },
-                          target: { id: op.targetId },
-                          attrs: { '.connection': { stroke: '#333', 'stroke-width': 2 } }
-                        });
+          if (this.api?.createTypedRelationship) {
+            const link = this.api.createTypedRelationship(op.sourceId, op.targetId, type, true);
 
-          link.set('id', op.id);
+            // Forzar ID remoto
+            link.set('id', op.id);
 
-          // 👉 Aplica los labels iniciales que envió el otro peer
-          if (op.payload?.labels) {
-            link.set('labels', op.payload.labels);
+            // Aplicar labels que vinieron en el payload
+            if (op.payload?.labels) {
+              link.set('labels', op.payload.labels);
+            }
+
+            graph.addCell(link);
           }
-
-          graph.addCell(link);
           break;
         }
 
 
-        case 'add_label': { 
-          const link = graph.getCell(op.linkId); 
-          if (!link) break; 
-          link.insertLabel(op.index, op.label); 
-          link.trigger('change:labels', link, link.labels()); 
-          break; 
-        }
 
-
-        case 'edit_label': { 
-          const link = graph.getCell(op.linkId); 
-          if (!link) break; 
-          const labels = link.labels() || []; 
-          if (op.index < 0 || op.index >= labels.length) { 
-            console.warn('[Collab] edit_label ignorado, índice inválido', op); 
-            break; 
-          } 
-          const lbl = labels[op.index]; 
-          link.label(op.index, { ...lbl, attrs: { text: { text: op.text } } }); 
-          link.trigger('change:labels', link, link.labels()); 
-          break; 
-        }
-
-        case 'move_label': { 
-          const link = graph.getCell(op.linkId); 
-          if (!link) break; 
-          const labels = link.labels() || []; 
-          if (op.index < 0 || op.index >= labels.length) { 
-            console.warn('[Collab] move_label ignorado, índice inválido', op); 
-            break; 
-          } 
-          const lbl = labels[op.index]; 
-          link.label(op.index, { ...lbl, position: op.position }); 
-          link.trigger('change:labels', link, link.labels()); 
-          break; 
-        }
-
-        case 'del_label': { 
-          const link = graph.getCell(op.linkId); 
-          if (!link) break; 
-          const labels = link.labels() || []; 
-          if (op.index < 0 || op.index >= labels.length) { 
-            console.warn('[Collab] del_label ignorado, índice inválido', op); 
-            break; 
-          } 
-          link.removeLabel(op.index); 
-          link.trigger('change:labels', link, link.labels()); 
-          break; 
-        }
 
         case 'move_link': {
           const link = graph.getCell(op.id);
           if (!link) break;
-          link.set('source', { id: op.sourceId });
-          link.set('target', { id: op.targetId });
+          link.set('source', { id: op.sourceId }, { collab: true });
+          link.set('target', { id: op.targetId }, { collab: true });
           break;
         }
+
         case 'update_vertices': {
           const link = graph.getCell(op.id);
           if (!link) break;
-          link.set('vertices', op.vertices);
+          link.set('vertices', op.vertices, { collab: true });
           break;
         }
-        case 'delete': {  
+
+
+        case 'add_label': {
+          const link = graph.getCell(op.linkId);
+          if (!link) break;
+
+          // aseguramos markup para compatibilidad
+          const label = {
+            ...op.label,
+            markup: op.label.markup || [{ tagName: 'text', selector: 'text' }]
+          };
+
+          link.insertLabel(op.index, label);
+          link.trigger('change:labels', link, link.labels());
+          break;
+        }
+
+        case 'edit_label': {
+          const link = graph.getCell(op.linkId);
+          if (!link) break;
+          const labels = link.labels() || [];
+          if (op.index < 0 || op.index >= labels.length) break;
+
+          const lbl = labels[op.index];
+          link.label(op.index, {
+            ...lbl,
+            attrs: { ...lbl.attrs, text: { ...lbl.attrs?.text, text: op.text } },
+            markup: lbl.markup || [{ tagName: 'text', selector: 'text' }]
+          });
+          link.trigger('change:labels', link, link.labels());
+          break;
+        }
+
+        case 'move_label': {
+          const link = graph.getCell(op.linkId);
+          if (!link) break;
+          const labels = link.labels() || [];
+          if (op.index < 0 || op.index >= labels.length) break;
+
+          const lbl = labels[op.index];
+          link.label(op.index, {
+            ...lbl,
+            position: op.position,
+            markup: lbl.markup || [{ tagName: 'text', selector: 'text' }]
+          });
+          link.trigger('change:labels', link, link.labels());
+          break;
+        }
+
+        case 'del_label': {
+          const link = graph.getCell(op.linkId);
+          if (!link) break;
+          link.removeLabel(op.index);
+          link.trigger('change:labels', link, link.labels());
+          break;
+        }
+
+
+        case 'delete': {
           const m = graph.getCell(op.id);
-          if (m) m.remove({ remote: true }); // 👈 marca para no rebroadcast
+          if (m) m.remove({ collab: true }); // <- importante para no re-emitir
           break;
         }
 

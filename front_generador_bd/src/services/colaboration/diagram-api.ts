@@ -6,4 +6,5 @@ export interface DiagramApi {
   buildLinkForRemote?(sourceId?: string, targetId?: string): any;
   // NUEVO: para colaboración
   createRelationship?(sourceId: string, targetId: string, remote?: boolean): any;
+  createTypedRelationship?(sourceId: string, targetId: string, type: string, remote?: boolean): any;
 }
