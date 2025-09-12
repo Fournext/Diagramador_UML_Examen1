@@ -50,90 +50,10 @@ export class RelationshipService {
 	/**
 	 * Crea una relación del tipo solicitado entre dos elementos
 	 */
-	private createTypedRelationship(
-		sourceId: string,
-		targetId: string,
-		type: string
-	) {
-		switch (type) {
-			case 'association':
-				this.diagramService.createRelationship(sourceId, targetId);
-				break;
-			case 'generalization': // Herencia
-				this.diagramService['graph'].addCell(
-					new this.diagramService['joint'].dia.Link({
-						name: 'Relacion',
-						source: { id: sourceId },
-						target: { id: targetId },
-						attrs: {
-							'.connection': { stroke: '#333', 'stroke-width': 2 },
-							'.marker-target': {
-								d: 'M 20 0 L 0 10 L 20 20 z',
-								fill: '#fff',
-								stroke: '#333',
-							},
-						},
-					})
-				);
-				break;
-			case 'aggregation':
-				this.diagramService['graph'].addCell(
-					new this.diagramService['joint'].dia.Link({
-						name: 'Relacion',
-						source: { id: sourceId },
-						target: { id: targetId },
-						attrs: {
-							'.connection': { stroke: '#333', 'stroke-width': 2 },
-							'.marker-source': {
-								d: 'M 0 10 L 10 0 L 20 10 L 10 20 z',
-								fill: '#fff',
-								stroke: '#333',
-							},
-						},
-					})
-				);
-				break;
-			case 'composition':
-				this.diagramService['graph'].addCell(
-					new this.diagramService['joint'].dia.Link({
-						name: 'Relacion',
-						source: { id: sourceId },
-						target: { id: targetId },
-						attrs: {
-							'.connection': { stroke: '#333', 'stroke-width': 2 },
-							'.marker-source': {
-								d: 'M 0 10 L 10 0 L 20 10 L 10 20 z',
-								fill: '#333',
-							},
-						},
-					})
-				);
-				break;
-			case 'dependency':
-				this.diagramService['graph'].addCell(
-					new this.diagramService['joint'].dia.Link({
-						name: 'Relacion',
-						source: { id: sourceId },
-						target: { id: targetId },
-						attrs: {
-							'.connection': {
-								stroke: '#333',
-								'stroke-width': 2,
-								'stroke-dasharray': '4 2',
-							},
-							'.marker-target': {
-								d: 'M 10 0 L 0 5 L 10 10 z',
-								fill: '#333',
-							},
-						},
-					})
-				);
-				break;
-			default:
-				console.warn(`Tipo de relación desconocido: ${type}, usando asociación.`);
-				this.diagramService.createRelationship(sourceId, targetId);
-		}
-	}
+  private createTypedRelationship(sourceId: string, targetId: string, type: string) {
+    this.diagramService.createTypedRelationship(sourceId, targetId, type);
+  }
+
 
 	/**
 	 * Cancela el modo de creación de relación
