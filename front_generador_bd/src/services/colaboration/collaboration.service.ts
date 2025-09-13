@@ -76,23 +76,27 @@ export class CollaborationService {
         }
         case 'add_link': {
           if (graph.getCell(op.id)) break;
+
           const type = op.payload?.type || 'association';
-
-          if (this.api?.createTypedRelationship) {
-            const link = this.api.createTypedRelationship(op.sourceId, op.targetId, type, true);
-
-            // Forzar ID remoto
-            link.set('id', op.id);
-
-            // Aplicar labels que vinieron en el payload
-            if (op.payload?.labels) {
-              link.set('labels', op.payload.labels);
-            }
-
-            graph.addCell(link);
+          
+          if (!this.api || !this.api.createTypedRelationship) {
+            console.warn('[Collab] API no soporta createTypedRelationship');
+            break;
           }
+          // construir SIN agregar (remote=true)
+          const link = this.api!.createTypedRelationship(op.sourceId, op.targetId, type, true);
+
+          // setear ID, tipo y labels ANTES de insertar
+          link.set('id', op.id);
+          link.set('relationType', type);
+          if (op.payload?.labels) link.set('labels', op.payload.labels);
+
+          // agregar una única vez, marcado como remoto
+          graph.addCell(link, { collab: true });
           break;
         }
+
+
 
 
 

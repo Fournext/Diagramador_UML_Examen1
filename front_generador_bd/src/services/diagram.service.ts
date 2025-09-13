@@ -73,20 +73,12 @@ export class DiagramService {
 			});
 
       
-      this.graph.on('remove', (cell: any, _collection: any, opt: any = {}) => {
-        if (opt?.collab) return; // viene de remoto, no re-emitir
-        this.collab.broadcast({ t: 'delete', id: cell.id });
-      });
+			this.graph.on('remove', (cell: any, _collection: any, opt: any = {}) => {
+				if (opt?.collab) return; // viene de remoto, no re-emitir
+				this.collab.broadcast({ t: 'delete', id: cell.id });
+			});
 
 			//👉 Difundir movimiento y redimensionamiento
-			this.paper.on('link:connect', (linkView: any) => {
-				const link = linkView.model;
-				const src = link.get('source')?.id;
-				const trg = link.get('target')?.id;
-				if (src && trg) {
-					this.collab.broadcast({ t: 'add_link', id: link.id, sourceId: src, targetId: trg });
-				}
-			});
 			this.paper.on('element:pointerup', (view: any) => {
 				const m = view.model;
 				const p = m.position();
@@ -108,6 +100,55 @@ export class DiagramService {
 				this.collab.broadcast({ t: 'move_label', linkId: model.id, index: idx, position: lbl.position });
 			});
 
+			// 1) Emitir add_link al añadir un Link localmente
+			this.graph.on('add', (cell: any, _col: any, opt: any = {}) => {
+			if (opt?.collab) return;                 // si viene de remoto, no re-emitir
+			if (!cell?.isLink?.()) return;
+
+			const src = cell.get('source')?.id;
+			const trg = cell.get('target')?.id;
+
+			// Si todavía no tiene ambos extremos (ej. link "fantasma" al arrastrar),
+			// dejamos que el handler de change:source/target haga el broadcast cuando se completen.
+			if (!src || !trg) return;
+
+			if (!cell.has('alreadyBroadcasted')) {
+				cell.set('alreadyBroadcasted', true, { silent: true });
+				const type = cell.get('relationType') || 'association';
+				this.collab.broadcast({
+				t: 'add_link',
+				id: cell.id,
+				sourceId: src,
+				targetId: trg,
+				payload: { type, labels: cell.get('labels') }
+				});
+			}
+			});
+
+			// 2) Respaldo: si el link se añadió sin extremos y luego se conectan
+			this.graph.on('change:source change:target', (link: any, _val: any, opt: any = {}) => {
+			if (!link?.isLink || opt?.collab) return;
+
+			const src = link.get('source')?.id;
+			const trg = link.get('target')?.id;
+			if (!src || !trg) return;
+
+			if (!link.has('alreadyBroadcasted')) {
+				link.set('alreadyBroadcasted', true, { silent: true });
+				const type = link.get('relationType') || 'association';
+				this.collab.broadcast({
+				t: 'add_link',
+				id: link.id,
+				sourceId: src,
+				targetId: trg,
+				payload: { type, labels: link.get('labels') }
+				});
+			} else {
+				this.collab.broadcast({ t: 'move_link', id: link.id, sourceId: src, targetId: trg });
+			}
+			});
+
+
 			/*COLABORACION DE RELACIONES*/
 			// Problema de loop al mover relacion
       let pendingLabelMove: { linkId: string; index: number; position: { distance: number; offset?: number } } | null = null;
@@ -119,22 +160,7 @@ export class DiagramService {
         requestAnimationFrame(flushLabelMove);
       };
       requestAnimationFrame(flushLabelMove);
-			this.paper.on('link:connect', (linkView: any) => {
-				const link = linkView.model;
-				const src = link.get('source')?.id;
-				const trg = link.get('target')?.id;
-				if (src && trg) {
-					if (!link.has('alreadyBroadcasted')) {
-						// primera vez → difundir creación
-						link.set('alreadyBroadcasted', true);
-						this.collab.broadcast({ t: 'add_link', id: link.id, sourceId: src, targetId: trg, payload: { labels: link.get('labels') } });
-					} else {
-						// siguientes → difundir solo movimiento
-						this.collab.broadcast({ t: 'move_link', id: link.id, sourceId: src, targetId: trg });
-					}
-				}
-			});
-			this.paper.on('link:label:pointermove', (linkView: any, evt: any) => {
+		this.paper.on('link:label:pointermove', (linkView: any, evt: any) => {
         const model = linkView.model;
         const idx = this.getClickedLabelIndex(linkView, evt);
         if (idx == null) return;
@@ -153,15 +179,35 @@ export class DiagramService {
         pendingLabelMove = null;
       });
 
-			// 👉 Vertices
-			this.graph.on('change:source change:target', (link: any, _val: any, opt: any = {}) => {
-        if (!link?.isLink || opt?.collab) return;
-        const src = link.get('source')?.id;
-        const trg = link.get('target')?.id;
-        if (src && trg) {
-          this.collab.broadcast({ t: 'move_link', id: link.id, sourceId: src, targetId: trg });
-        }
-      });
+		// 👉 Vertices
+		this.graph.on('change:source change:target', (link: any, _val: any, opt: any = {}) => {
+		if (!link?.isLink || opt?.collab) return;
+
+		const src = link.get('source')?.id;
+		const trg = link.get('target')?.id;
+		if (!src || !trg) return;
+
+		if (!link.has('alreadyBroadcasted')) {
+			link.set('alreadyBroadcasted', true);
+
+			// 👇 extraer el tipo del link si existe, si no, fallback
+			const type = link.get('relationType') || 'association';
+
+			this.collab.broadcast({
+			t: 'add_link',
+			id: link.id,
+			sourceId: src,
+			targetId: trg,
+			payload: { type, labels: link.get('labels') }
+			});
+		} else {
+			this.collab.broadcast({ t: 'move_link', id: link.id, sourceId: src, targetId: trg });
+		}
+		});
+
+
+
+
 
       // 3.3. CURVATURA / RUTEO DEL LINK (vértices)
       this.graph.off('change:vertices'); // evita doble registro si reinicializas
@@ -318,29 +364,31 @@ export class DiagramService {
 
 
 	// Construye una relación (link) con configuración por defecto
-  private buildRelationship(sourceId?: string, targetId?: string) {
-    return new this.joint.dia.Link({
-      name: 'Relacion',
-      source: sourceId ? { id: sourceId } : undefined,
-      target: targetId ? { id: targetId } : undefined,
-      attrs: {
-        '.connection': { stroke: '#333333', 'stroke-width': 2 },
-        '.marker-target': { fill: '#333333', d: 'M 10 0 L 0 5 L 10 10 z' }
-      },
-      labels: [
-        {
-          position: { distance: 20,  offset: -10 },
-          attrs: { text: { text: '0..1', fill: '#333', fontSize: 12 } },
-          markup: [{ tagName: 'text', selector: 'text' }]
-        },
-        {
-          position: { distance: -20, offset: -10 },
-          attrs: { text: { text: '1..*', fill: '#333', fontSize: 12 } },
-          markup: [{ tagName: 'text', selector: 'text' }]
-        }
-      ]
-    });
-  }
+	private buildRelationship(sourceId?: string, targetId?: string) {
+	return new this.joint.dia.Link({
+		name: 'Relacion',
+		relationType: 'association',    // 👈 tipo por defecto
+		source: sourceId ? { id: sourceId } : undefined,
+		target: targetId ? { id: targetId } : undefined,
+		attrs: {
+		'.connection': { stroke: '#333333', 'stroke-width': 2 },
+		'.marker-target': { fill: '#333333', d: 'M 10 0 L 0 5 L 10 10 z' }
+		},
+		labels: [
+		{
+			position: { distance: 20,  offset: -10 },
+			attrs: { text: { text: '0..1', fill: '#333', fontSize: 12 } },
+			markup: [{ tagName: 'text', selector: 'text' }]
+		},
+		{
+			position: { distance: -20, offset: -10 },
+			attrs: { text: { text: '1..*', fill: '#333', fontSize: 12 } },
+			markup: [{ tagName: 'text', selector: 'text' }]
+		}
+		]
+	});
+	}
+
 
   private readonly relationAttrs: any = {
     association: {
@@ -382,48 +430,42 @@ export class DiagramService {
   /**
    * Crea una relación tipada entre dos elementos y la añade al grafo
    */
-  createTypedRelationship(sourceId: string, targetId: string, type: string = 'association', remote: boolean = false) {
-    const attrs = this.relationAttrs[type] || this.relationAttrs.association;
+	createTypedRelationship(
+	sourceId: string,
+	targetId: string,
+	type: string = 'association',
+	remote: boolean = false
+	) {
+	const attrs = this.relationAttrs[type] || this.relationAttrs.association;
 
-    const link = new this.joint.dia.Link({
-      name: 'Relacion',
-      source: { id: sourceId },
-      target: { id: targetId },
-      attrs
-    });
+	const link = new this.joint.dia.Link({
+		name: 'Relacion',
+		relationType: type,             // 👈 guarda el tipo
+		source: { id: sourceId },
+		target: { id: targetId },
+		attrs
+	});
 
-    link.set('labels', [
-      {
-        position: { distance: 20, offset: -10 },
-        attrs: { text: { text: '0..1', fill: '#333', fontSize: 12 } },
-        markup: [{ tagName: 'text', selector: 'text' }]
-      },
-      {
-        position: { distance: -20, offset: -10 },
-        attrs: { text: { text: '1..*', fill: '#333', fontSize: 12 } },
-        markup: [{ tagName: 'text', selector: 'text' }]
-      }
-    ]);
+	link.set('labels', [
+		{
+		position: { distance: 20, offset: -10 },
+		attrs: { text: { text: '0..1', fill: '#333', fontSize: 12 } },
+		markup: [{ tagName: 'text', selector: 'text' }]
+		},
+		{
+		position: { distance: -20, offset: -10 },
+		attrs: { text: { text: '1..*', fill: '#333', fontSize: 12 } },
+		markup: [{ tagName: 'text', selector: 'text' }]
+		}
+	]);
 
+	if (!remote) {
+		this.graph.addCell(link);       // 👈 disparará 'add' → broadcast
+	}
 
-    this.graph.addCell(link);
+	return link;
+	}
 
-    if (!remote) {
-      this.collab.broadcast({
-        t: 'add_link',
-        id: link.id,
-        sourceId,
-        targetId,
-        payload: { 
-          type, 
-          labels: link.get('labels')   // 👈 ya trae los dos labels
-        }
-      });
-    }
-
-
-    return link;
-  }
 
 
 
