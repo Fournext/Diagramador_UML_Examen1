@@ -26,7 +26,7 @@ export class P2PService {
   ];
 
   private newPeer(remoteId: string, isInitiator: boolean) {
-    console.log(`[P2P] Creando peer con ${remoteId}, initiator=${isInitiator}`);
+    //console.log(`[P2P] Creando peer con ${remoteId}, initiator=${isInitiator}`);
     const pc = new RTCPeerConnection({ iceServers: this.iceServers });
     const peer: Peer = { pc };
     this.peers.set(remoteId, peer);
@@ -43,7 +43,7 @@ export class P2PService {
       pc.createOffer().then(offer => {
         pc.setLocalDescription(offer);
         this.signaling.sendSignal(remoteId, { type: 'offer', sdp: offer });
-        console.log(`[P2P] Offer enviada a ${remoteId}`);
+        //console.log(`[P2P] Offer enviada a ${remoteId}`);
       });
     } else {
       pc.ondatachannel = (ev) => this.attachDataChannel(remoteId, ev.channel);
@@ -70,15 +70,15 @@ export class P2PService {
   }
 
   private async handleSignaling(msg: any) {
-    console.log('[P2P] handleSignaling:', JSON.stringify(msg));
+    //console.log('[P2P] handleSignaling:', JSON.stringify(msg));
 
     if (msg.type === 'presence') {
       if (msg.peer && !this.localId) {
         this.localId = msg.peer;
-        console.log('[P2P] Mi localId:', this.localId);
+        //console.log('[P2P] Mi localId:', this.localId);
       }
       if (msg.action === 'join') {
-        console.log(`[P2P] PRESENCE join de ${msg.peer}`);
+        //console.log(`[P2P] PRESENCE join de ${msg.peer}`);
         // Aviso a la sala que estoy disponible
         this.signaling.broadcast({ type: 'announce' });
       }
@@ -103,19 +103,19 @@ export class P2PService {
       const payload = msg.payload;
 
       if (payload.type === 'offer') {
-        console.log(`[P2P] Offer recibido de ${remoteId}`);
+        //console.log(`[P2P] Offer recibido de ${remoteId}`);
         await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         this.signaling.sendSignal(remoteId, { type: 'answer', sdp: answer });
-        console.log(`[P2P] Answer enviada a ${remoteId}`);
+        //console.log(`[P2P] Answer enviada a ${remoteId}`);
       } else if (payload.type === 'answer') {
-        console.log(`[P2P] Answer recibido de ${remoteId}`);
+        //console.log(`[P2P] Answer recibido de ${remoteId}`);
         await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
       } else if (payload.type === 'ice' && payload.candidate) {
         try {
           await pc.addIceCandidate(payload.candidate);
-          console.log(`[P2P] ICE aplicado de ${remoteId}`);
+          //console.log(`[P2P] ICE aplicado de ${remoteId}`);
         } catch (e) {
           console.warn('[P2P] Error aplicando ICE:', e);
         }
@@ -125,7 +125,7 @@ export class P2PService {
 
   sendToAll(data: any) {
     const json = JSON.stringify(data);
-    console.log('[P2P] Enviando op a todos:', json);
+    //console.log('[P2P] Enviando op a todos:', json);
     for (const [, p] of this.peers) {
       if (p.dc?.readyState === 'open') p.dc.send(json);
     }

@@ -10,6 +10,7 @@ import { DragDropModule, CdkDragEnd, CdkDragStart } from '@angular/cdk/drag-drop
 })
 export class SidePanel {
   @Output() elementDragged = new EventEmitter<CdkDragEnd>();
+  @Output() saveClicked = new EventEmitter<void>(); // 👈 nuevo
   
   onDragEnded(event: CdkDragEnd) {
     // Enviamos el evento al componente padre (diagram)
@@ -18,5 +19,8 @@ export class SidePanel {
     // Importante: restablecemos la transformación para que el elemento original vuelva a su posición
     // y no se quede donde fue soltado
     event.source.reset();
+  }
+  onSaveClicked() {
+    this.saveClicked.emit(); // 👈 dispara evento al padre
   }
 }

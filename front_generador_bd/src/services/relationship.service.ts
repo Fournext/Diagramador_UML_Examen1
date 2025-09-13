@@ -28,7 +28,7 @@ export class RelationshipService {
 			if (!this.sourceElement) {
 				// Primera selección
 				this.sourceElement = cellView.model;
-				console.log(`Primer elemento seleccionado para relación (${this.currentType})`);
+				//console.log(`Primer elemento seleccionado para relación (${this.currentType})`);
 			} else {
 				// Segunda selección, creamos la relación
 				this.createTypedRelationship(
@@ -41,7 +41,7 @@ export class RelationshipService {
 				containerElement.style.cursor = 'default';
 				this.sourceElement = null;
 				this.clickHandler = null;
-				console.log(`Relación creada (${this.currentType})`);
+				//console.log(`Relación creada (${this.currentType})`);
 			}
 		};
 		this.paper.on('cell:pointerclick', this.clickHandler);
