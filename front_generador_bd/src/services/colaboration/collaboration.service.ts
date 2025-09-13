@@ -58,10 +58,19 @@ export class CollaborationService {
             attributes: '.uml-class-attrs-text',
             methods: '.uml-class-methods-text',
           } as const;
+
           m.attr(`${map[op.field]}/text`, op.value);
-          m.trigger('change:attrs', m, {});
+
+          if (!this.api || !this.api.getEdition) {
+            console.warn('[Collab] API no soporta getEdition');
+            break;
+          }
+          // 🔴 Forzar auto-resize en receptor
+          this.api?.getEdition()?.scheduleAutoResize(m, this.api!.getPaper?.() ?? null);
           break;
         }
+
+
         case 'move': {
           const m = graph.getCell(op.id);
           if (!m) break;
@@ -95,11 +104,6 @@ export class CollaborationService {
           graph.addCell(link, { collab: true });
           break;
         }
-
-
-
-
-
 
         case 'move_link': {
           const link = graph.getCell(op.id);
