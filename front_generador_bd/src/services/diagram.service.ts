@@ -329,6 +329,8 @@ export class DiagramService {
       this.collab.registerDiagramApi({
         getGraph: () => this.graph,
         getJoint: () => this.joint,
+		getEdition: () => this.edition, 
+		getPaper: () => this.paper,
         createUmlClass: (payload) => this.createUmlClass(payload),
         buildLinkForRemote: this.buildLinkForRemote,
         createRelationship: (sourceId, targetId, remote = false) =>

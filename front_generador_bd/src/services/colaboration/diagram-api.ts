@@ -7,4 +7,6 @@ export interface DiagramApi {
   // NUEVO: para colaboración
   createRelationship?(sourceId: string, targetId: string, remote?: boolean): any;
   createTypedRelationship?(sourceId: string, targetId: string, type: string, remote?: boolean): any;
+  getEdition?(): any;
+  getPaper?(): any;
 }
