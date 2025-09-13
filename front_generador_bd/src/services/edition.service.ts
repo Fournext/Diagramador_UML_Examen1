@@ -65,7 +65,7 @@ export class EditionService {
         const raw = (editor as HTMLInputElement | HTMLTextAreaElement).value;
         const newValue = field === 'name' ? raw.trim() : raw.replace(/\r?\n/g, '\n');
         model.attr(`${selector}/text`, newValue);
-        
+        model.set(field, newValue);
         collab?.broadcast({ t: 'edit_text', id: model.id, field, value: newValue });
         this.scheduleAutoResize(model, paper);
       }
@@ -138,6 +138,7 @@ export class EditionService {
         const text = input.value.trim();
         model.label(labelIndex, { ...model.label(labelIndex), attrs: { text: { text } } });
         collab?.broadcast({ t: 'edit_label', linkId: model.id, index: labelIndex, text });
+        model.set('label', text);
       }
       if (labelNode) { labelNode.removeAttribute('stroke'); labelNode.removeAttribute('stroke-width'); }
       input.parentNode && input.parentNode.removeChild(input);

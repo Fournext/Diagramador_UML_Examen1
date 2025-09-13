@@ -4,6 +4,7 @@ import { EditionService } from './edition.service';
 import { v4 as uuid } from 'uuid';
 import { CollaborationService } from './colaboration/collaboration.service';
 import { RemoteApplicationService } from './colaboration/remote-application.service';
+import { DiagramExportService } from './diagram-export.service';
 
 @Injectable({ providedIn: 'root' })
 export class DiagramService {
@@ -14,15 +15,9 @@ export class DiagramService {
 
 	constructor(
 		private edition: EditionService,
-		private collab: CollaborationService
+		private collab: CollaborationService,
+		private exportService: DiagramExportService
 	) {}
-
-	// === Constantes de tamaño mínimo ===
-	private readonly MIN_W = 180; // tu ancho estándar inicial
-	private readonly NAME_H = 30; // cabecera fija
-	private readonly MIN_ATTRS_H = 40;
-	private readonly MIN_METHS_H = 40;
-	private readonly PAD_V = 10; // padding vertical extra
 
 	/**
 	 * Inicializa JointJS y configura el papel y grafo
@@ -489,6 +484,14 @@ export class DiagramService {
 			if (node && (evt.target === node || node.contains(evt.target as Node))) return i;
 		}
 		return null;
+	}
+
+	saveDiagram() {
+		const json = this.exportService.export(this.graph);
+		console.log('JSON limpio:', JSON.stringify(json, null, 2));
+
+		// Aquí ya lo puedes mandar con HttpClient al backend
+		// this.http.post('/api/diagrams', json).subscribe(...)
 	}
 
 	/**************************************************************************************************

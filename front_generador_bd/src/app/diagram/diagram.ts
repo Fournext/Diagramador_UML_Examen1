@@ -6,6 +6,7 @@ import { DiagramService } from '../../services/diagram.service';
 import { FallbackService } from '../../services/fallback.service';
 import { RelationshipService } from '../../services/relationship.service';
 import { UmlClass, Attribute, Method } from '../../models/uml-class.model';
+import { DiagramExportService } from '../../services/diagram-export.service';
 
 @Component({
   selector: 'app-diagram',
@@ -23,7 +24,8 @@ export class Diagram implements AfterViewInit {
     private ngZone: NgZone,
     private diagramService: DiagramService,
     private fallbackService: FallbackService,
-    private relationshipService: RelationshipService
+    private relationshipService: RelationshipService,
+    private exportService: DiagramExportService  
   ) {}
 
   async ngAfterViewInit(): Promise<void> {
@@ -38,6 +40,8 @@ export class Diagram implements AfterViewInit {
           this.sidePanel.elementDragged.subscribe((event: CdkDragEnd) => {
             this.onDragEnded(event);
           });
+
+          this.sidePanel.saveClicked.subscribe(() => this.saveDiagram());
           
           console.log('Diagrama inicializado correctamente');
         } catch (error) {
@@ -45,6 +49,13 @@ export class Diagram implements AfterViewInit {
         }
       });
     }
+  }
+  saveDiagram() {
+    const json = this.exportService.export(this.diagramService.getGraph());
+    console.log('JSON exportado:', JSON.stringify(json, null, 2));
+
+    // luego lo puedes enviar a backend
+    // this.http.post('/api/diagram', json).subscribe(...)
   }
 
 
@@ -127,7 +138,5 @@ export class Diagram implements AfterViewInit {
 
     });
   }
-
-
 }
 
