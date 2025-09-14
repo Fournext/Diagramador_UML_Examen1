@@ -7,6 +7,7 @@ import { FallbackService } from '../../services/fallback.service';
 import { RelationshipService } from '../../services/relationship.service';
 import { UmlClass, Attribute, Method } from '../../models/uml-class.model';
 import { DiagramExportService } from '../../services/diagram-export.service';
+import { BackendGeneratorService } from '../../services/backend-generator.service';
 
 @Component({
   selector: 'app-diagram',
@@ -25,7 +26,8 @@ export class Diagram implements AfterViewInit {
     private diagramService: DiagramService,
     private fallbackService: FallbackService,
     private relationshipService: RelationshipService,
-    private exportService: DiagramExportService  
+    private exportService: DiagramExportService,
+    private backendGen: BackendGeneratorService
   ) {}
 
   async ngAfterViewInit(): Promise<void> {
@@ -55,7 +57,7 @@ export class Diagram implements AfterViewInit {
     console.log('JSON exportado:', JSON.stringify(json, null, 2));
 
     // luego lo puedes enviar a backend
-    // this.http.post('/api/diagram', json).subscribe(...)
+    this.backendGen.generateBackend(json, 'mi-backend.zip');
   }
 
 

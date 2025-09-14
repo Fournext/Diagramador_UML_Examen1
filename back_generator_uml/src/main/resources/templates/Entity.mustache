@@ -1,14 +1,18 @@
 package {{basePackage}}.model;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import lombok.experimental.SuperBuilder;
+import java.util.*;
 
 @Entity
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class {{EntityName}} {
+@SuperBuilder
+public class {{EntityName}}{{#parentClass}} extends {{parentClass}}{{/parentClass}} {
 
 @Id
 @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -19,4 +23,31 @@ private Long id;
         private {{type}} {{name}};
     {{/isId}}
 {{/attributes}}
+
+{{#manyToOne}}
+    @ManyToOne
+    @JoinColumn(name = "{{targetField}}_id")
+    private {{TargetEntity}} {{targetField}};
+{{/manyToOne}}
+
+{{#oneToMany}}
+    @OneToMany(mappedBy = "{{mappedBy}}", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<{{TargetEntity}}> {{collectionField}} = new ArrayList<>();
+{{/oneToMany}}
+
+{{#oneToOne}}
+    @OneToOne
+    @JoinColumn(name = "{{targetField}}_id")
+    private {{TargetEntity}} {{targetField}};
+{{/oneToOne}}
+
+{{#manyToMany}}
+    @ManyToMany
+    @JoinTable(
+    name = "{{joinTable}}",
+    joinColumns = @JoinColumn(name = "{{thisTable}}_id"),
+    inverseJoinColumns = @JoinColumn(name = "{{otherTable}}_id")
+    )
+    private Set<{{TargetEntity}}> {{collectionField}} = new HashSet<>();
+{{/manyToMany}}
 }

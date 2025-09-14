@@ -6,6 +6,7 @@ import { provideClientHydration, withEventReplay } from '@angular/platform-brows
 import { DiagramService } from '../services/diagram.service';
 import { FallbackService } from '../services/fallback.service';
 import { RelationshipService } from '../services/relationship.service';
+import { provideHttpClient } from '@angular/common/http';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -16,6 +17,7 @@ export const appConfig: ApplicationConfig = {
     // Servicios para el diagrama
     DiagramService,
     FallbackService,
-    RelationshipService
+    RelationshipService,
+    provideHttpClient()
   ]
 };
