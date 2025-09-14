@@ -1,0 +1,22 @@
+package {{basePackage}}.model;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+@Entity
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class {{EntityName}} {
+
+@Id
+@GeneratedValue(strategy = GenerationType.IDENTITY)
+private Long id;
+
+{{#attributes}}
+    {{^isId}}
+        private {{type}} {{name}};
+    {{/isId}}
+{{/attributes}}
+}
