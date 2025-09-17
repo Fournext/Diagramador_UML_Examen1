@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { v4 as uuid } from 'uuid';
-import { CollaborationService } from './colaboration/collaboration.service';
+import { CollaborationService } from '../colaboration/collaboration.service';
 
 
 

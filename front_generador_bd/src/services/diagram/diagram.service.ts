@@ -1,10 +1,10 @@
 import { Injectable } from '@angular/core';
-import { UmlClass } from '../models/uml-class.model';
+import { UmlClass } from '../../models/uml-class.model';
 import { EditionService } from './edition.service';
 import { v4 as uuid } from 'uuid';
-import { CollaborationService } from './colaboration/collaboration.service';
-import { RemoteApplicationService } from './colaboration/remote-application.service';
-import { DiagramExportService } from './diagram-export.service';
+import { CollaborationService } from '../colaboration/collaboration.service';
+import { RemoteApplicationService } from '../colaboration/remote-application.service';
+import { DiagramExportService } from '../exports/diagram-export.service';
 
 @Injectable({ providedIn: 'root' })
 export class DiagramService {

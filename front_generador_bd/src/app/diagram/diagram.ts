@@ -2,13 +2,13 @@ import { AfterViewInit, Component, ElementRef, HostListener, Inject, NgZone, PLA
 import { isPlatformBrowser } from '@angular/common';
 import { CdkDragEnd, CdkDropListGroup, CdkDropList } from '@angular/cdk/drag-drop';
 import { SidePanel } from "../side-panel/side-panel";
-import { DiagramService } from '../../services/diagram.service';
-import { FallbackService } from '../../services/fallback.service';
-import { RelationshipService } from '../../services/relationship.service';
+import { DiagramService } from '../../services/diagram/diagram.service';
+import { FallbackService } from '../../services/diagram/fallback.service';
+import { RelationshipService } from '../../services/diagram/relationship.service';
 import { UmlClass, Attribute, Method } from '../../models/uml-class.model';
-import { DiagramExportService } from '../../services/diagram-export.service';
-import { BackendGeneratorService } from '../../services/backend-generator.service';
-import { ChatbotService } from '../../services/chatbot.service';
+import { DiagramExportService } from '../../services/exports/diagram-export.service';
+import { BackendGeneratorService } from '../../services/exports/backend-generator.service';
+import { ChatbotService } from '../../services/IA/chatbot.service';
 
 @Component({
   selector: 'app-diagram',

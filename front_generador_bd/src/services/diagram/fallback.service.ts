@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { UmlClass } from '../models/uml-class.model';
+import { UmlClass } from '../../models/uml-class.model';
 
 @Injectable({
   providedIn: 'root'
