@@ -49,4 +49,13 @@
   </div>
 
   <button class="save-btn" (click)="onSaveClicked()">💾 Guardar</button>
+
+  <!-- Chatbot panel -->
+  <div class="chatbot-panel">
+    <h4>🤖 Generar modelo</h4>
+    <textarea [(ngModel)]="prompt"
+              placeholder="Describe tu modelo aquí..."
+              rows="4"></textarea>
+    <button class="generate-btn" (click)="onGenerate()">Generar</button>
+  </div>
 </div>

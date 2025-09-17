@@ -700,4 +700,46 @@ export class DiagramService {
 	getJoint() {
 		return this.joint;
 	}
+	loadFromJson(json: any) {
+  if (!this.graph) return;
+
+  // Limpiar canvas actual
+  this.graph.clear();
+
+  // 1. Crear todas las clases
+  json.classes.forEach((cls: any) => {
+    this.createUmlClass({
+      id: cls.id,
+      name: cls.name,
+      position: cls.position || { x: 100, y: 100 },
+      size: cls.size || { width: 180, height: 110 },
+      attributes: cls.attributes,
+      methods: cls.methods
+    }); // remote = true → no se rebroadcast
+  });
+
+  // 2. Crear todas las relaciones
+  json.relationships.forEach((rel: any) => {
+    const link = this.createTypedRelationship(
+      rel.sourceId,
+      rel.targetId,
+      rel.type,
+      true
+    );
+    // forzar el ID remoto
+    link.set('id', rel.id);
+
+    // aplicar labels si vienen
+    if (rel.labels) {
+      link.set('labels', rel.labels.map((txt: string) => ({
+        position: { distance: 20, offset: -10 },
+        attrs: { text: { text: txt, fill: '#333', fontSize: 12 } },
+        markup: [{ tagName: 'text', selector: 'text' }]
+      })));
+    }
+
+    this.graph.addCell(link);
+  });
+}
+
 }

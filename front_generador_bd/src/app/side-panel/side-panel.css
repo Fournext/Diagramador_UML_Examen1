@@ -65,3 +65,31 @@
 .save-btn:hover {
   background: #1976d2;
 }
+
+.chatbot-panel {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  border-top: 1px solid #ccc;
+}
+
+.chatbot-panel textarea {
+  width: 100%;
+  resize: none;
+  padding: 0.5rem;
+  font-size: 14px;
+  margin-bottom: 0.5rem;
+}
+
+.generate-btn {
+  width: 100%;
+  padding: 0.5rem;
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.generate-btn:hover {
+  background: #388e3c;
+}
+

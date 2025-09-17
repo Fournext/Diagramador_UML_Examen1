@@ -8,6 +8,7 @@ import { RelationshipService } from '../../services/relationship.service';
 import { UmlClass, Attribute, Method } from '../../models/uml-class.model';
 import { DiagramExportService } from '../../services/diagram-export.service';
 import { BackendGeneratorService } from '../../services/backend-generator.service';
+import { ChatbotService } from '../../services/chatbot.service';
 
 @Component({
   selector: 'app-diagram',
@@ -27,7 +28,8 @@ export class Diagram implements AfterViewInit {
     private fallbackService: FallbackService,
     private relationshipService: RelationshipService,
     private exportService: DiagramExportService,
-    private backendGen: BackendGeneratorService
+    private backendGen: BackendGeneratorService,
+    private chatbot: ChatbotService,
   ) {}
 
   async ngAfterViewInit(): Promise<void> {
@@ -44,6 +46,10 @@ export class Diagram implements AfterViewInit {
           });
 
           this.sidePanel.saveClicked.subscribe(() => this.saveDiagram());
+
+          this.sidePanel.generateClicked.subscribe((prompt: string) => {
+            this.generateFromPrompt(prompt);
+          });
           
           console.log('Diagrama inicializado correctamente');
         } catch (error) {
@@ -60,6 +66,17 @@ export class Diagram implements AfterViewInit {
     this.backendGen.generateBackend(json, 'mi-backend.zip');
   }
 
+  generateFromPrompt(prompt: string) {
+    this.chatbot.generateDiagram(prompt).subscribe({
+      next: (json) => {
+        console.log('Respuesta del chatbot:', json);
+        this.diagramService.loadFromJson(json);
+      },
+      error: (err) => {
+        console.error('Error al generar diagrama desde chatbot', err);
+      }
+    });
+  }
 
   @HostListener('document:keydown', ['$event'])
   handleEscape(event: KeyboardEvent) {
