@@ -5,6 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { CollaborationService } from '../colaboration/collaboration.service';
 import { RemoteApplicationService } from '../colaboration/remote-application.service';
 import { DiagramExportService } from '../exports/diagram-export.service';
+import { UmlValidationService } from '../colaboration/uml-validation.service';
 
 @Injectable({ providedIn: 'root' })
 export class DiagramService {
@@ -16,7 +17,8 @@ export class DiagramService {
 	constructor(
 		private edition: EditionService,
 		private collab: CollaborationService,
-		private exportService: DiagramExportService
+		private exportService: DiagramExportService,
+		private umlValidationService: UmlValidationService
 	) {}
 
 	/**
@@ -71,6 +73,8 @@ export class DiagramService {
 			this.graph.on('remove', (cell: any, _collection: any, opt: any = {}) => {
 				if (opt?.collab) return; // viene de remoto, no re-emitir
 				this.collab.broadcast({ t: 'delete', id: cell.id });
+				const umlJson = this.exportService.export(this.graph);
+				this.umlValidationService.validateModel(umlJson);
 			});
 
 			//👉 Difundir movimiento y redimensionamiento
@@ -140,6 +144,8 @@ export class DiagramService {
 					});
 				} else {
 					this.collab.broadcast({ t: 'move_link', id: link.id, sourceId: src, targetId: trg });
+					const umlJson = this.exportService.export(this.graph);
+    				this.umlValidationService.validateModel(umlJson);
 				}
 			});
 
@@ -197,6 +203,8 @@ export class DiagramService {
 					});
 				} else {
 					this.collab.broadcast({ t: 'move_link', id: link.id, sourceId: src, targetId: trg });
+					const umlJson = this.exportService.export(this.graph);
+    				this.umlValidationService.validateModel(umlJson);
 				}
 			});
 
@@ -274,7 +282,7 @@ export class DiagramService {
 				if (labelIndex === null) return;
 				const label = model.label(labelIndex);
 				const currentValue = label?.attrs?.text?.text || '';
-				this.edition.startEditingLabel(model, this.paper, labelIndex, currentValue, x, y, this.collab);
+				this.edition.startEditingLabel(model, this.paper, labelIndex, currentValue, x, y, this.collab, this.graph);
 				const node = linkView.findLabelNode(labelIndex) as SVGElement;
 				if (node) {
 					node.setAttribute('stroke', '#2196f3');
@@ -310,7 +318,7 @@ export class DiagramService {
 				index: newIndex,
 				label: newLabel
 				});
-				this.edition.startEditingLabel(model, this.paper, newIndex, 'label', x, y, this.collab);
+				this.edition.startEditingLabel(model, this.paper, newIndex, 'label', x, y, this.collab,this.graph);
 			});
 
 			// 👉 inicializa colaboración **ANTES** de salir
@@ -701,45 +709,50 @@ export class DiagramService {
 		return this.joint;
 	}
 	loadFromJson(json: any) {
-  if (!this.graph) return;
+		if (!this.graph) return;
 
-  // Limpiar canvas actual
-  this.graph.clear();
+		// Limpiar canvas actual
+		this.graph.clear();
 
-  // 1. Crear todas las clases
-  json.classes.forEach((cls: any) => {
-    this.createUmlClass({
-      id: cls.id,
-      name: cls.name,
-      position: cls.position || { x: 100, y: 100 },
-      size: cls.size || { width: 180, height: 110 },
-      attributes: cls.attributes,
-      methods: cls.methods
-    }); // remote = true → no se rebroadcast
-  });
+		// 1. Crear todas las clases
+		json.classes.forEach((cls: any) => {
+			this.createUmlClass({
+			id: cls.id,
+			name: cls.name,
+			position: cls.position || { x: 100, y: 100 },
+			size: cls.size || { width: 180, height: 110 },
+			attributes: cls.attributes,
+			methods: cls.methods
+			}); // remote = true → no se rebroadcast
+		});
 
-  // 2. Crear todas las relaciones
-  json.relationships.forEach((rel: any) => {
-    const link = this.createTypedRelationship(
-      rel.sourceId,
-      rel.targetId,
-      rel.type,
-      true
-    );
-    // forzar el ID remoto
-    link.set('id', rel.id);
+		// 2. Crear todas las relaciones
+		json.relationships.forEach((rel: any) => {
+			const link = this.createTypedRelationship(
+			rel.sourceId,
+			rel.targetId,
+			rel.type,
+			true
+			);
+			// forzar el ID remoto
+			link.set('id', rel.id);
 
-    // aplicar labels si vienen
-    if (rel.labels) {
-      link.set('labels', rel.labels.map((txt: string) => ({
-        position: { distance: 20, offset: -10 },
-        attrs: { text: { text: txt, fill: '#333', fontSize: 12 } },
-        markup: [{ tagName: 'text', selector: 'text' }]
-      })));
-    }
+			// aplicar labels si vienen
+			if (rel.labels) {
+			link.set('labels', rel.labels.map((txt: string) => ({
+				position: { distance: 20, offset: -10 },
+				attrs: { text: { text: txt, fill: '#333', fontSize: 12 } },
+				markup: [{ tagName: 'text', selector: 'text' }]
+			})));
+			}
 
-    this.graph.addCell(link);
-  });
-}
+			this.graph.addCell(link);
+		});
+	}
+
+	exportToJson() {
+		if (!this.graph) return null;
+		return this.exportService.export(this.graph);
+	}
 
 }

@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import { v4 as uuid } from 'uuid';
 import { CollaborationService } from '../colaboration/collaboration.service';
+import { DiagramExportService } from '../exports/diagram-export.service';
+import { UmlValidationService } from '../colaboration/uml-validation.service';
 
 
 
@@ -11,6 +13,10 @@ export class EditionService {
   readonly MIN_ATTRS_H = 40;
   readonly MIN_METHS_H = 40;
   readonly PAD_V = 10;
+  constructor(
+    private exportService: DiagramExportService,
+		private umlValidationService: UmlValidationService
+  ){}
   // ========= Edición de campos =========
   startEditing(
     model: any,
@@ -93,7 +99,8 @@ export class EditionService {
     currentValue: string,
     x: number,
     y: number,
-    collab?: { broadcast: (msg: any) => void }
+    collab?: { broadcast: (msg: any) => void },
+    graph?: any
   ) {
     const paperRect = paper.el.getBoundingClientRect();
     const absX = paperRect.left + x;
@@ -139,6 +146,8 @@ export class EditionService {
         model.label(labelIndex, { ...model.label(labelIndex), attrs: { text: { text } } });
         collab?.broadcast({ t: 'edit_label', linkId: model.id, index: labelIndex, text });
         model.set('label', text);
+        const umlJson = this.exportService.export(graph);
+        this.umlValidationService.validateModel(umlJson);
       }
       if (labelNode) { labelNode.removeAttribute('stroke'); labelNode.removeAttribute('stroke-width'); }
       input.parentNode && input.parentNode.removeChild(input);

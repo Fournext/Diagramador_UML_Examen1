@@ -9,6 +9,7 @@ import { UmlClass, Attribute, Method } from '../../models/uml-class.model';
 import { DiagramExportService } from '../../services/exports/diagram-export.service';
 import { BackendGeneratorService } from '../../services/exports/backend-generator.service';
 import { ChatbotService } from '../../services/IA/chatbot.service';
+import { UmlValidationService } from '../../services/colaboration/uml-validation.service';
 
 @Component({
   selector: 'app-diagram',
@@ -30,6 +31,7 @@ export class Diagram implements AfterViewInit {
     private exportService: DiagramExportService,
     private backendGen: BackendGeneratorService,
     private chatbot: ChatbotService,
+    private umlValidation: UmlValidationService
   ) {}
 
   async ngAfterViewInit(): Promise<void> {
@@ -49,6 +51,10 @@ export class Diagram implements AfterViewInit {
 
           this.sidePanel.generateClicked.subscribe((prompt: string) => {
             this.generateFromPrompt(prompt);
+          });
+          
+          this.umlValidation.connect((result) => {
+            this.sidePanel.updateValidationResult(result);
           });
           
           console.log('Diagrama inicializado correctamente');

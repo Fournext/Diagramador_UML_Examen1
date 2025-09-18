@@ -1,6 +1,7 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
-
+from uml_api.services import call_gemini_analysis
+import re
 class CanvasConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         print("[CanvasConsumer.connect] scope:", self.scope)
@@ -89,3 +90,42 @@ class CanvasConsumer(AsyncWebsocketConsumer):
             "action": event["action"],
             "peer": event["peer"]
         }))
+
+
+
+class UMLConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        await self.accept()
+
+    async def receive(self, text_data):
+        data = json.loads(text_data)
+        action = data.get("action")
+
+        if action == "validate_model":
+            uml_json = data.get("uml")
+
+            prompt = f"""
+Eres un experto en diseño de bases de datos.
+Analiza si las relaciones de este UML son correctas en base a los nombres y atributos.
+
+JSON UML:
+{json.dumps(uml_json, indent=2)}
+"""
+
+            # Llamar a Gemini
+            raw_output = call_gemini_analysis(prompt)
+
+            # 🧹 limpiar markdown (```json ... ```)
+            if isinstance(raw_output, str):
+                raw_output = re.sub(r"^```json\s*|\s*```$", "", raw_output.strip(), flags=re.MULTILINE)
+
+            try:
+                analysis = json.loads(raw_output)
+            except Exception:
+                analysis = {"error": "Formato inválido", "raw": raw_output}
+
+            # Enviar al front
+            await self.send(text_data=json.dumps({
+                "action": "validation_result",
+                "analysis": analysis
+            }, ensure_ascii=False))

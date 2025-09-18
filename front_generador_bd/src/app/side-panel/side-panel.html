@@ -58,4 +58,39 @@
               rows="4"></textarea>
     <button class="generate-btn" (click)="onGenerate()">Generar</button>
   </div>
+
+   <!-- Panel de validaciones -->
+  <div class="validation-panel">
+    <div class="validation-header" (click)="toggleValidationPanel()">
+      <h4>🔍 Sugerencias del modelo</h4>
+      <span>{{ validationCollapsed ? '➕' : '➖' }}</span>
+    </div>
+    <button (click)="analyzeNow()">🔍 Analizar modelo</button>
+    <div *ngIf="!validationCollapsed" class="validation-content">
+      <div *ngIf="!validationResult">
+        <p>No hay validaciones aún.</p>
+      </div>
+
+      <div *ngIf="validationResult">
+        <!-- Validas -->
+        <h5>✅ Relaciones válidas</h5>
+        <ul>
+          <li *ngFor="let v of validationResult.analysis.validas">
+            <strong>{{ v.relacion }}</strong><br />
+            <small>{{ v.razon }}</small>
+          </li>
+        </ul>
+
+        <!-- Errores -->
+        <h5>❌ Errores</h5>
+        <ul>
+          <li *ngFor="let e of validationResult.analysis.errores">
+            <strong>{{ e.relacion }}</strong><br />
+            <small>{{ e.problema }}</small><br />
+            <em>Sugerencia: {{ e.sugerencia }}</em>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
 </div>
