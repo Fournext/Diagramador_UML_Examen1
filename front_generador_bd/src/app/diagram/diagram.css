@@ -1,14 +1,21 @@
 .app-layout {
   display: flex;
-  height: 100vh;
-  position: relative;
+  height: 100vh;     /* ocupa toda la ventana */
+  width: 100vw;      /* asegura el ancho completo */
+}
+.app-layout > app-side-panel {
+  flex: 0 0 250px;   /* sidebar fijo de 250px */
+  border-right: 1px solid #ccc;
+  background: #fff;
 }
 
 .canvas-wrapper {
-  flex: 1;
-  display: flex;
-  position: relative;
-  overflow: hidden;
+  flex: 1;           /* ocupa todo el espacio sobrante */
+  display: flex;     
+  flex-direction: column;
+  height: 100%;      /* fuerza a tener altura */
+  overflow: auto;
+  background: #f8f9fa;
 }
 
 .diagram-container {
@@ -27,7 +34,9 @@
 
 /* Aumentar el z-index de todos los elementos del papel/canvas de JointJS */
 .joint-paper {
-  z-index: 1;
+  flex: 1;           /* el SVG rellena el wrapper */
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* Elementos JointJS */

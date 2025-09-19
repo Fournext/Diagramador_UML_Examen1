@@ -94,6 +94,13 @@ export class Diagram implements AfterViewInit {
     }
   }
   
+  @HostListener('window:resize')
+  onResize() {
+    if (this.diagramService['paper'] && this.paperContainer) {
+      const rect = this.paperContainer.nativeElement.getBoundingClientRect();
+      this.diagramService['paper'].setDimensions(rect.width, rect.height);
+    }
+  }
 
 
   onDragEnded(event: CdkDragEnd) {

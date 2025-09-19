@@ -600,8 +600,8 @@ export class DiagramService {
 					strokeWidth: 2,
 					stroke: '#2196f3',
 					fill: '#ffffff',
-					width: '100%',
-					height: '100%',
+					width: 180, // Fijo para evitar cambios inesperados
+					height: 110, // Fijo para evitar cambios inesperados
 				},
 				'.uml-class-name-rect': { refWidth: '100%', height: 30, fill: '#e3f2fd' },
 				'.sep-name': { stroke: '#2196f3', strokeWidth: 1, shapeRendering: 'crispEdges' },
@@ -709,46 +709,68 @@ export class DiagramService {
 		return this.joint;
 	}
 	loadFromJson(json: any) {
-		if (!this.graph) return;
+	if (!this.graph) return;
 
-		// Limpiar canvas actual
-		this.graph.clear();
+	// 1. Crear (o reusar) todas las clases
+	const idMap: Record<string, string> = {}; 
+	// mapea el id original del JSON -> id real en el canvas
 
-		// 1. Crear todas las clases
-		json.classes.forEach((cls: any) => {
-			this.createUmlClass({
-			id: cls.id,
+	json.classes.forEach((cls: any) => {
+		// Buscar si ya existe una clase con ese nombre
+		const existing = this.graph.getCells().find((c: any) => {
+		return c.isElement?.() && c.get('name') === cls.name;
+		});
+
+		if (existing) {
+		console.log(`Clase "${cls.name}" ya existe, reusando...`);
+		idMap[cls.id] = existing.id; // guardamos el id real
+		} else {
+		const newCls = this.createUmlClass({
+			id: cls.id, // mantén el id original
 			name: cls.name,
 			position: cls.position || { x: 100, y: 100 },
 			size: cls.size || { width: 180, height: 110 },
 			attributes: cls.attributes,
 			methods: cls.methods
-			}); // remote = true → no se rebroadcast
+		}); // remote = true → no rebroadcast
+
+		idMap[cls.id] = newCls.id;
+		}
+	});
+
+	// 2. Crear todas las relaciones
+	json.relationships.forEach((rel: any) => {
+		const srcId = idMap[rel.sourceId] || rel.sourceId;
+		const trgId = idMap[rel.targetId] || rel.targetId;
+
+		// Evitar duplicados: buscar si ya existe una relación igual
+		const existingLink = this.graph.getLinks().find((l: any) => {
+		return l.get('source')?.id === srcId && l.get('target')?.id === trgId && l.get('type') === rel.type;
 		});
 
-		// 2. Crear todas las relaciones
-		json.relationships.forEach((rel: any) => {
-			const link = this.createTypedRelationship(
-			rel.sourceId,
-			rel.targetId,
-			rel.type,
-			true
-			);
-			// forzar el ID remoto
-			link.set('id', rel.id);
+		if (existingLink) {
+		console.log(`Relación ${rel.type} entre ${srcId} y ${trgId} ya existe`);
+		return;
+		}
 
-			// aplicar labels si vienen
-			if (rel.labels) {
-			link.set('labels', rel.labels.map((txt: string) => ({
-				position: { distance: 20, offset: -10 },
-				attrs: { text: { text: txt, fill: '#333', fontSize: 12 } },
-				markup: [{ tagName: 'text', selector: 'text' }]
-			})));
-			}
+		const link = this.createTypedRelationship(srcId, trgId, rel.type, true);
 
-			this.graph.addCell(link);
-		});
+		// forzar el ID remoto
+		link.set('id', rel.id);
+
+		// aplicar labels si vienen
+		if (rel.labels) {
+		link.set('labels', rel.labels.map((txt: string, i: number) => ({
+			position: { distance: i === 0 ? 20 : -20, offset: -10 },
+			attrs: { text: { text: txt, fill: '#333', fontSize: 12 } },
+			markup: [{ tagName: 'text', selector: 'text' }]
+		})));
+		}
+
+		this.graph.addCell(link);
+	});
 	}
+
 
 	exportToJson() {
 		if (!this.graph) return null;
