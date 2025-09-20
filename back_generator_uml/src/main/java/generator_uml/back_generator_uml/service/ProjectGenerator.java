@@ -58,17 +58,52 @@ public class ProjectGenerator {
         Files.createDirectories(svcDir);
         Files.createDirectories(ctrlDir);
 
+        //Normalizar Clases
+        schema = JsonNormalizer.normalize(schema);
         // Procesar clases
         for (UmlClass c : schema.getClasses()) {
             String entityName = NamingUtil.toJavaClass(c.getName());
 
             // Atributos
             List<Map<String, Object>> attrs = new ArrayList<>();
+            boolean pkAssigned = false; // Solo una Pk por clase
+
             for (var attr : c.getAttributes()) {
                 Map<String, Object> a = new HashMap<>();
-                a.put("name", attr.getName());
-                a.put("type", TypeMapper.toJava(attr.getType()));
-                a.put("isId", attr.getName().equalsIgnoreCase("id"));
+                String type = TypeMapper.toJava(attr.getType());
+                String name = NamingUtil.toField(attr.getName());
+
+                boolean isNumeric = type.equalsIgnoreCase("int")
+                        || type.equalsIgnoreCase("Integer")
+                        || type.equalsIgnoreCase("long")
+                        || type.equalsIgnoreCase("Long")
+                        || type.equalsIgnoreCase("short")
+                        || type.equalsIgnoreCase("byte");
+
+                if (!pkAssigned) { // ✅ solo asignar PK una vez
+                    if (isNumeric) {
+                        a.put("isId", true);
+                        a.put("type", "Long");
+                        a.put("generated", true);
+                        pkAssigned = true;
+                    } else if (type.equalsIgnoreCase("String")
+                            || type.equalsIgnoreCase("char")
+                            || type.equalsIgnoreCase("Character")) {
+                        a.put("isId", true);
+                        a.put("type", "String");
+                        a.put("generated", false);
+                        pkAssigned = true;
+                    } else {
+                        a.put("isId", false);
+                        a.put("type", type);
+                    }
+                } else {
+                    // todos los demás atributos normales
+                    a.put("isId", false);
+                    a.put("type", type);
+                }
+
+                a.put("name", name);
                 attrs.add(a);
             }
 
@@ -143,6 +178,29 @@ public class ProjectGenerator {
                     }
                 }
             }
+            // Metodos
+            List<Map<String, Object>> methods = new ArrayList<>();
+            for (var m : c.getMethods()) {
+                Map<String, Object> mm = new HashMap<>();
+                String returnType = (m.getReturnType() == null || m.getReturnType().isBlank()) ? "void" : TypeMapper.toJava(m.getReturnType());
+
+                mm.put("name", m.getName());
+                mm.put("parameters", m.getParameters() == null ? "" : m.getParameters());
+                mm.put("returnType", returnType);
+
+                // Si returnType no es void, genera un valor por defecto
+                String defaultReturn = switch (returnType) {
+                    case "int", "long", "short", "byte" -> "0";
+                    case "double", "float" -> "0.0";
+                    case "boolean" -> "false";
+                    case "char" -> "'\\u0000'";
+                    default -> "null"; // para String y objetos
+                };
+                mm.put("defaultReturn", defaultReturn);
+
+                methods.add(mm);
+            }
+
 
             // Contexto para la entidad
             Map<String, Object> entityCtx = new HashMap<>();
@@ -154,6 +212,7 @@ public class ProjectGenerator {
             entityCtx.put("oneToOne", oneToOne);
             entityCtx.put("manyToMany", manyToMany);
             entityCtx.put("parentClass", parentClass);
+            entityCtx.put("methods", methods);
 
             // Render entidad
             render("Entity.mustache", entityCtx, modelDir.resolve(entityName + ".java"));

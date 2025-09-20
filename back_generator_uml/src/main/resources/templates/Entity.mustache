@@ -14,11 +14,15 @@ import java.util.*;
 @SuperBuilder
 public class {{EntityName}}{{#parentClass}} extends {{parentClass}}{{/parentClass}} {
 
-@Id
-@GeneratedValue(strategy = GenerationType.IDENTITY)
-private Long id;
-
 {{#attributes}}
+    {{#isId}}
+        @Id
+        {{#generated}}
+            @GeneratedValue(strategy = GenerationType.IDENTITY)
+        {{/generated}}
+        private {{type}} {{name}};
+    {{/isId}}
+
     {{^isId}}
         private {{type}} {{name}};
     {{/isId}}
@@ -50,4 +54,11 @@ private Long id;
     )
     private Set<{{TargetEntity}}> {{collectionField}} = new HashSet<>();
 {{/manyToMany}}
+
+{{#methods}}
+    public {{returnType}} {{name}}({{parameters}}) {
+    // TODO: implementar
+    {{#defaultReturn}}return {{defaultReturn}};{{/defaultReturn}}
+    }
+{{/methods}}
 }
