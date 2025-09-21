@@ -4,8 +4,9 @@ import { EditionService } from './edition.service';
 import { v4 as uuid } from 'uuid';
 import { CollaborationService } from '../colaboration/collaboration.service';
 import { RemoteApplicationService } from '../colaboration/remote-application.service';
-import { DiagramExportService } from '../exports/diagram-export.service';
+import { DiagramExportService, UmlExportDTO } from '../exports/diagram-export.service';
 import { UmlValidationService } from '../colaboration/uml-validation.service';
+import { BackupService } from '../exports/backup.service';
 
 @Injectable({ providedIn: 'root' })
 export class DiagramService {
@@ -13,19 +14,23 @@ export class DiagramService {
 	private graph: any;
 	private paper: any;
 	private selectedCell: any = null;
+	private storageKey = '';
 
 	constructor(
 		private edition: EditionService,
 		private collab: CollaborationService,
 		private exportService: DiagramExportService,
-		private umlValidationService: UmlValidationService
+		private umlValidationService: UmlValidationService,
+		private backup: BackupService,
 	) {}
 
 	/**
 	 * Inicializa JointJS y configura el papel y grafo
 	 */
-	async initialize(paperElement: HTMLElement): Promise<void> {
+	async initialize(paperElement: HTMLElement, roomId: string): Promise<void> {
 		try {
+			// Configura la clave de almacenamiento local
+			this.storageKey = `diagram-${roomId}`;
 			// Importamos JointJS
 			this.joint = await import('jointjs');
 			// Creamos el grafo
@@ -236,6 +241,10 @@ export class DiagramService {
 				this.collab.broadcast({ t: 'resize', id: m.id, w: s.width, h: s.height });
 				pendingResize = null;
 			});
+			// Guardar en localStorage ante cualquier cambio
+			this.graph.on('add remove change', () => {
+				this.persist();
+			});
 
 			/**************************************************************************************************
 			 * EVENTOS INTERACTIVOS EN EL PAPER (MODICACION LOCAL)
@@ -335,10 +344,28 @@ export class DiagramService {
 				// 👇 añade esto
 				createTypedRelationship: (sourceId: string, targetId: string, type: string, remote = false) =>
 				this.createTypedRelationship(sourceId, targetId, type, remote),
+
+				loadFromJson: (json) => this.loadFromJson(json),
+				exportToJson: () => this.exportService.export(this.graph),
 			});
 
-			this.collab.init('room-123');
-			console.log('JointJS inicializado correctamente');
+			// Obtener Persistencia Mediante LocalStorage
+			const saved = localStorage.getItem(this.storageKey);
+			if (saved) {
+			try {
+				const json: UmlExportDTO = JSON.parse(saved);
+				this.loadFromJson(json,false);
+				//console.log('Lienzo restaurado desde localStorage');
+			} catch (err) {
+				console.warn('No se pudo restaurar lienzo:', err);
+			}
+			}
+
+			this.collab.init(roomId);
+			console.log('JointJS inicializado en room:', roomId);
+			if (this.graph.getCells().length === 0) {
+				this.collab.broadcast({ t: 'request_full_state' });
+			}
 			return Promise.resolve();
 		} catch (error) {
 			console.error('Error al inicializar JointJS:', error);
@@ -708,73 +735,104 @@ export class DiagramService {
 	getJoint() {
 		return this.joint;
 	}
-	loadFromJson(json: any) {
-	if (!this.graph) return;
+	loadFromJson(json: any, isStorageLoad: boolean = false) {
+		if (!this.graph) return;
 
-	// 1. Crear (o reusar) todas las clases
-	const idMap: Record<string, string> = {}; 
-	// mapea el id original del JSON -> id real en el canvas
+		const idMap: Record<string, string> = {}; 
+		// mapea el id original del JSON -> id real en el canvas
 
-	json.classes.forEach((cls: any) => {
-		// Buscar si ya existe una clase con ese nombre
-		const existing = this.graph.getCells().find((c: any) => {
-		return c.isElement?.() && c.get('name') === cls.name;
+		// 1. Crear (o reusar) todas las clases
+		json.classes.forEach((cls: any) => {
+			const existing = this.graph.getCells().find((c: any) => {
+			return c.isElement?.() && c.get('name') === cls.name;
+			});
+			if (existing && isStorageLoad) {
+			idMap[cls.id] = existing.id; 
+			// 🔹 restaurar posición/tamaño si vino del storage
+			if (cls.position) existing.position(cls.position.x, cls.position.y);
+			if (cls.size) existing.resize(cls.size.width, cls.size.height);
+			} else {
+			const newCls = this.createUmlClass({
+				id: cls.id,
+				name: cls.name,
+				position: cls.position || { x: 100, y: 100 },
+				size: cls.size || { width: 180, height: 110 },
+				attributes: cls.attributes,
+				methods: cls.methods
+			});
+
+			idMap[cls.id] = newCls.id;
+			}
 		});
 
-		if (existing) {
-		console.log(`Clase "${cls.name}" ya existe, reusando...`);
-		idMap[cls.id] = existing.id; // guardamos el id real
-		} else {
-		const newCls = this.createUmlClass({
-			id: cls.id, // mantén el id original
-			name: cls.name,
-			position: cls.position || { x: 100, y: 100 },
-			size: cls.size || { width: 180, height: 110 },
-			attributes: cls.attributes,
-			methods: cls.methods
-		}); // remote = true → no rebroadcast
+		// 2. Crear todas las relaciones
+		json.relationships.forEach((rel: any) => {
+			const srcId = idMap[rel.sourceId] || rel.sourceId;
+			const trgId = idMap[rel.targetId] || rel.targetId;
 
-		idMap[cls.id] = newCls.id;
-		}
-	});
+			const existingLink = this.graph.getLinks().find((l: any) => {
+			return (
+				l.get('source')?.id === srcId &&
+				l.get('target')?.id === trgId &&
+				l.get('relationType') === rel.type
+			);
+			});
 
-	// 2. Crear todas las relaciones
-	json.relationships.forEach((rel: any) => {
-		const srcId = idMap[rel.sourceId] || rel.sourceId;
-		const trgId = idMap[rel.targetId] || rel.targetId;
+			if (existingLink) return;
 
-		// Evitar duplicados: buscar si ya existe una relación igual
-		const existingLink = this.graph.getLinks().find((l: any) => {
-		return l.get('source')?.id === srcId && l.get('target')?.id === trgId && l.get('type') === rel.type;
+			const link = this.createTypedRelationship(srcId, trgId, rel.type, true);
+			link.set('id', rel.id);
+
+			// 🔹 aplicar labels si vienen
+			if (rel.labels) {
+			link.set(
+				'labels',
+				rel.labels.map((txt: string, i: number) => ({
+				position: { distance: i === 0 ? 20 : -20, offset: -10 },
+				attrs: { text: { text: txt, fill: '#333', fontSize: 12 } },
+				markup: [{ tagName: 'text', selector: 'text' }]
+				}))
+			);
+			}
+
+			// 🔹 restaurar vértices si existen
+			if (rel.vertices && rel.vertices.length > 0) {
+			link.set('vertices', rel.vertices);
+			}
+
+			this.graph.addCell(link);
 		});
-
-		if (existingLink) {
-		console.log(`Relación ${rel.type} entre ${srcId} y ${trgId} ya existe`);
-		return;
-		}
-
-		const link = this.createTypedRelationship(srcId, trgId, rel.type, true);
-
-		// forzar el ID remoto
-		link.set('id', rel.id);
-
-		// aplicar labels si vienen
-		if (rel.labels) {
-		link.set('labels', rel.labels.map((txt: string, i: number) => ({
-			position: { distance: i === 0 ? 20 : -20, offset: -10 },
-			attrs: { text: { text: txt, fill: '#333', fontSize: 12 } },
-			markup: [{ tagName: 'text', selector: 'text' }]
-		})));
-		}
-
-		this.graph.addCell(link);
-	});
 	}
 
-
+	// Exporta el estado actual del diagrama a JSON
 	exportToJson() {
 		if (!this.graph) return null;
 		return this.exportService.export(this.graph);
+	}
+	// Guarda el estado actual del diagrama en localStorages
+	private persist() {
+		if (!this.graph) return;
+		const json = this.exportService.export(this.graph);
+		localStorage.setItem(this.storageKey, JSON.stringify(json));
+	}
+	// Limpia el diagrama guardado en localStorage
+	clearStorage() {
+		localStorage.removeItem(this.storageKey);
+	}
+	closeDiagram(roomId: string) {
+		const snapshot = this.exportToJson();
+		 if (snapshot) {
+			this.backup.setBackupUml(roomId, snapshot).subscribe({
+			next: () => {
+				console.log('✅ Backup enviado al backend');
+				this.collab.closeSocketRTC();
+				this.graph?.clear();
+				this.selectedCell = null;
+			},
+			error: (err) => console.error('❌ Error enviando backup:', err)
+			});
+		}
+		
 	}
 
 }

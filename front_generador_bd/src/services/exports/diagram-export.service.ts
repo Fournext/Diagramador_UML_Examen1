@@ -5,6 +5,8 @@ export interface UmlClassDTO {
   name: string;
   attributes: { name: string; type: string }[];
   methods: { name: string; parameters?: string; returnType?: string }[];
+  position: { x: number; y: number };
+  size: { width: number; height: number };
 }
 
 export interface UmlRelationshipDTO {
@@ -13,6 +15,7 @@ export interface UmlRelationshipDTO {
   sourceId: string;
   targetId: string;
   labels?: string[];
+  vertices?: { x: number; y: number }[];
 }
 
 export interface UmlExportDTO {
@@ -31,7 +34,6 @@ export class DiagramExportService {
 
     graph.getCells().forEach((cell: any) => {
       if (cell.isElement?.()) {
-        // Extraer atributos y métodos, soportando tanto array como texto
         const rawAttrs = cell.get('attributes');
         const rawMeths = cell.get('methods');
 
@@ -47,7 +49,9 @@ export class DiagramExportService {
           id: cell.id,
           name: cell.get('name'),
           attributes,
-          methods
+          methods,
+          position: cell.position(),  // 👈 posición
+          size: cell.size()           // 👈 tamaño
         });
       } else if (cell.isLink?.()) {
         relationships.push({
@@ -55,7 +59,8 @@ export class DiagramExportService {
           type: cell.get('relationType') || 'association',
           sourceId: cell.get('source')?.id,
           targetId: cell.get('target')?.id,
-          labels: (cell.get('labels') || []).map((lbl: any) => lbl.attrs?.text?.text)
+          labels: (cell.get('labels') || []).map((lbl: any) => lbl.attrs?.text?.text),
+          vertices: cell.get('vertices') || []   
         });
       }
     });

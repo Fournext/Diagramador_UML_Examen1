@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { P2PService } from './p2p.service';
 import { DiagramApi } from './diagram-api';
+import { BackupService } from '../exports/backup.service';
 
 type Op = 
   | { t: 'add_class'; id: string; payload: any }
@@ -14,13 +15,18 @@ type Op =
   | { t: 'move_label'; linkId: string; index: number; position: { distance: number; offset?: number } }
   | { t: 'move_link'; id: string; sourceId: string; targetId: string }
   | { t: 'update_vertices'; id: string; vertices: any[] }
-  | { t: 'delete'; id: string };
+  | { t: 'delete'; id: string }
+  | { t: 'request_full_state' }
+  | { t: 'full_state'; payload: any };
 
 @Injectable({ providedIn: 'root' })
 export class CollaborationService {
   private api?: DiagramApi;
   private ready = false;
-  constructor(private p2p: P2PService) {}
+  constructor(
+    private p2p: P2PService,
+    private backup: BackupService
+  ) {}
 
   registerDiagramApi(api: DiagramApi) {
     this.api = api;
@@ -33,11 +39,28 @@ export class CollaborationService {
     };
     this.p2p.init(roomId);
     this.ready = true;
+    //this.broadcast({ t: 'request_full_state' });
+    setTimeout(() => {
+      if (!this.api?.getGraph()?.getCells()?.length) {
+        console.log('[Collab] Nadie respondió, cargo backup de BD...');
+        this.backup.getBackup(roomId).subscribe({
+          next: (snapshot) => {
+            if (snapshot) this.api!.loadFromJson(snapshot, true);
+          },
+          error: (err) => console.error('[Collab] Error obteniendo backup', err)
+        });
+      }
+    }, 3000);
   }
 
   broadcast(op: Op) {
     if (!this.ready) return;
     this.p2p.sendToAll(op);
+  }
+
+  closeSocketRTC() {
+    this.p2p.closeSocketRTC();
+    this.ready = false;
   }
 
   private applyRemoteOp(op: Op) {
@@ -182,6 +205,20 @@ export class CollaborationService {
           if (m) m.remove({ collab: true }); // <- importante para no re-emitir
           break;
         }
+
+        case 'request_full_state': {
+          const snapshot = this.api!.exportToJson();
+          this.broadcast({ t: 'full_state', payload: snapshot });
+          break;
+        }
+
+        case 'full_state': {
+          if (this.api) {
+            this.api!.loadFromJson(op.payload);
+          }
+          break;
+        }
+
 
       }
     } catch (err) {

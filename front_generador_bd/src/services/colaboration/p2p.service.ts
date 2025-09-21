@@ -59,7 +59,12 @@ export class P2PService {
       return;
     }
     p.dc = dc;
-    dc.onopen = () => console.log(`[P2P] DataChannel abierto con ${remoteId}`);
+    dc.onopen = () => {
+      if (this.onData) {
+        this.onData(remoteId, { t: 'request_full_state' } as any);
+        
+      }
+    };
     dc.onmessage = (ev) => {
       try {
         this.onData && this.onData(remoteId, JSON.parse(ev.data));
@@ -69,8 +74,8 @@ export class P2PService {
     };
   }
 
+
   private async handleSignaling(msg: any) {
-    //console.log('[P2P] handleSignaling:', JSON.stringify(msg));
 
     if (msg.type === 'presence') {
       if (msg.peer && !this.localId) {
@@ -110,8 +115,9 @@ export class P2PService {
         this.signaling.sendSignal(remoteId, { type: 'answer', sdp: answer });
         //console.log(`[P2P] Answer enviada a ${remoteId}`);
       } else if (payload.type === 'answer') {
-        //console.log(`[P2P] Answer recibido de ${remoteId}`);
-        await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+        if (pc.signalingState !== 'stable') {
+          await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+        }
       } else if (payload.type === 'ice' && payload.candidate) {
         try {
           await pc.addIceCandidate(payload.candidate);
@@ -124,10 +130,29 @@ export class P2PService {
   }
 
   sendToAll(data: any) {
-    const json = JSON.stringify(data);
-    //console.log('[P2P] Enviando op a todos:', json);
-    for (const [, p] of this.peers) {
-      if (p.dc?.readyState === 'open') p.dc.send(json);
+  const json = JSON.stringify(data);
+  for (const [id, p] of this.peers) {
+    if (p.dc?.readyState === 'open') {
+      p.dc.send(json);
     }
   }
+}
+
+  closeSocketRTC() {
+    // Cerrar WebRTC peers
+    for (const [id, peer] of this.peers) {
+      try {
+        peer.dc?.close();
+      } catch {}
+      try {
+        peer.pc.close();
+      } catch {}
+    }
+    this.peers.clear();
+    this.localId = '';
+
+    // Cerrar signaling
+    this.signaling.close();
+  }
+
 }

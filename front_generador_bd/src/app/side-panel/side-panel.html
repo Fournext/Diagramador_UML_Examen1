@@ -1,95 +1,163 @@
-<div class="side-panel">
+<div class="flex flex-col w-63 h-full bg-gray-50 border-r border-gray-200 shadow-md p-4 space-y-6">
 
-  <div
-    class="palette-item"
-    cdkDrag
-    [cdkDragData]="{ type: 'class' }"
-    (cdkDragEnded)="onDragEnded($event)">
-    <div class="item-content">📦 Clase UML</div>
+  <!-- Header -->
+  <div class="flex justify-between items-center mb-2">
+    <h2 class="text-lg font-semibold text-gray-800"> Herramientas UML</h2>
+    <button 
+      class="text-sm text-red-500 hover:text-red-700 font-medium transition"
+      (click)="goHome()">
+      ⬅️ Salir
+    </button>
   </div>
 
-  <div
-    class="palette-item"
-    cdkDrag
-    [cdkDragData]="{ type: 'association' }"
-    (cdkDragEnded)="onDragEnded($event)">
-    <div class="item-content">🔗 Asociación</div>
+  <!-- Paleta de elementos -->
+  <div class="space-y-2">
+    <div
+      class="palette-item cursor-pointer bg-white border rounded-lg shadow-sm px-3 py-2 hover:bg-purple-50 transition"
+      cdkDrag
+      [cdkDragData]="{ type: 'class' }"
+      (cdkDragEnded)="onDragEnded($event)">
+      📦 <span class="ml-1">Clase UML</span>
+    </div>
+
+    <div
+      class="palette-item cursor-pointer bg-white border rounded-lg shadow-sm px-3 py-2 hover:bg-purple-50 transition"
+      cdkDrag
+      [cdkDragData]="{ type: 'association' }"
+      (cdkDragEnded)="onDragEnded($event)">
+      🔗 <span class="ml-1">Asociación</span>
+    </div>
+
+    <div
+      class="palette-item cursor-pointer bg-white border rounded-lg shadow-sm px-3 py-2 hover:bg-purple-50 transition"
+      cdkDrag
+      [cdkDragData]="{ type: 'generalization' }"
+      (cdkDragEnded)="onDragEnded($event)">
+      ⬆️ <span class="ml-1">Herencia</span>
+    </div>
+
+    <div
+      class="palette-item cursor-pointer bg-white border rounded-lg shadow-sm px-3 py-2 hover:bg-purple-50 transition"
+      cdkDrag
+      [cdkDragData]="{ type: 'aggregation' }"
+      (cdkDragEnded)="onDragEnded($event)">
+      ◇ <span class="ml-1">Agregación</span>
+    </div>
+
+    <div
+      class="palette-item cursor-pointer bg-white border rounded-lg shadow-sm px-3 py-2 hover:bg-purple-50 transition"
+      cdkDrag
+      [cdkDragData]="{ type: 'composition' }"
+      (cdkDragEnded)="onDragEnded($event)">
+      ◆ <span class="ml-1">Composición</span>
+    </div>
+
+    <div
+      class="palette-item cursor-pointer bg-white border rounded-lg shadow-sm px-3 py-2 hover:bg-purple-50 transition"
+      cdkDrag
+      [cdkDragData]="{ type: 'dependency' }"
+      (cdkDragEnded)="onDragEnded($event)">
+      ⋯ <span class="ml-1">Dependencia</span>
+    </div>
   </div>
 
-  <div
-    class="palette-item"
-    cdkDrag
-    [cdkDragData]="{ type: 'generalization' }"
-    (cdkDragEnded)="onDragEnded($event)">
-    <div class="item-content">⬆️ Herencia</div>
-  </div>
+  <!-- Botón guardar -->
+  <button
+    class="w-full bg-blue-500 text-white rounded-lg py-2 font-medium hover:bg-blue-600 transition"
+    (click)="onSaveClicked()">
+    💾 Exportar a Backend
+  </button>
 
-  <div
-    class="palette-item"
-    cdkDrag
-    [cdkDragData]="{ type: 'aggregation' }"
-    (cdkDragEnded)="onDragEnded($event)">
-    <div class="item-content">◇ Agregación</div>
-  </div>
+  <button
+    class="w-full mt-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg py-2 font-medium shadow-md transition"
+    (click)="copyRoomCode()">
+    📋 Copiar código de sala
+  </button>
+  <small *ngIf="copied" class="text-green-600 mt-1 block text-center">¡Copiado!</small>
 
-  <div
-    class="palette-item"
-    cdkDrag
-    [cdkDragData]="{ type: 'composition' }"
-    (cdkDragEnded)="onDragEnded($event)">
-    <div class="item-content">◆ Composición</div>
-  </div>
 
-  <div
-    class="palette-item"
-    cdkDrag
-    [cdkDragData]="{ type: 'dependency' }"
-    (cdkDragEnded)="onDragEnded($event)">
-    <div class="item-content">⋯ Dependencia</div>
-  </div>
-
-  <button class="save-btn" (click)="onSaveClicked()">💾 Guardar</button>
 
   <!-- Chatbot panel -->
-  <div class="chatbot-panel">
-    <h4>🤖 Generar modelo</h4>
-    <textarea [(ngModel)]="prompt"
-              placeholder="Describe tu modelo aquí..."
-              rows="4"></textarea>
-    <button class="generate-btn" (click)="onGenerate()">Generar</button>
+  <div class="chatbot-panel bg-white rounded-lg shadow-md p-3 space-y-2">
+    <h4 class="font-semibold text-gray-700">🤖 Generar modelo</h4>
+
+    <div class="flex space-x-2">
+      <textarea [(ngModel)]="prompt"
+                class="w-full border rounded-md p-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none resize-none"
+                placeholder="Describe tu modelo aquí..."
+                rows="3"></textarea>
+
+      <button
+        (click)="toggleVoiceInput()"
+        class="px-3 py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600 transition">
+        <span *ngIf="!recognizing">🎤</span>
+        <span *ngIf="recognizing">⏹️</span>
+      </button>
+    </div>
+
+    <button
+      class="w-full bg-purple-600 text-white rounded-lg py-2 font-medium hover:bg-purple-700 transition"
+      (click)="onGenerate()">
+      Generar
+    </button>
   </div>
 
-   <!-- Panel de validaciones -->
-  <div class="validation-panel">
-    <div class="validation-header" (click)="toggleValidationPanel()">
-      <h4>🔍 Sugerencias del modelo</h4>
-      <span>{{ validationCollapsed ? '➕' : '➖' }}</span>
+
+  <!-- Panel de validaciones -->
+  <div class="validation-panel bg-white rounded-lg shadow-md p-3">
+    <div class="flex justify-between items-center cursor-pointer"
+         (click)="toggleValidationPanel()">
+      <h4 class="font-semibold text-gray-700">🔍 Sugerencias del modelo</h4>
+      <span class="text-xl">
+        <ng-container *ngIf="validationCollapsed; else minusIcon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#8B5CF6" stroke-width="2"/><line x1="12" y1="8" x2="12" y2="16" stroke="#8B5CF6" stroke-width="2"/><line x1="8" y1="12" x2="16" y2="12" stroke="#8B5CF6" stroke-width="2"/></svg>
+        </ng-container>
+        <ng-template #minusIcon>
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#8B5CF6" stroke-width="2"/><line x1="8" y1="12" x2="16" y2="12" stroke="#8B5CF6" stroke-width="2"/></svg>
+        </ng-template>
+      </span>
     </div>
-    <button (click)="analyzeNow()">🔍 Analizar modelo</button>
-    <div *ngIf="!validationCollapsed" class="validation-content">
-      <div *ngIf="!validationResult">
-        <p>No hay validaciones aún.</p>
+
+    <button
+      class="mt-2 w-full bg-green-500 text-white rounded-lg py-1.5 font-medium hover:bg-green-600 transition"
+      (click)="analyzeNow()"
+      [disabled]="analyzingModel">
+      <svg xmlns="http://www.w3.org/2000/svg" class="inline-block mr-1" width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#fff" stroke-width="2"/><line x1="16" y1="16" x2="21" y2="21" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+      <span *ngIf="!analyzingModel">Analizar modelo</span>
+      <span *ngIf="analyzingModel">Analizando...</span>
+    </button>
+
+    <div *ngIf="!validationCollapsed" class="mt-3 text-sm text-gray-700 space-y-3">
+      <div *ngIf="analyzingModel">
+        <p class="italic text-purple-500 flex items-center"><svg xmlns="http://www.w3.org/2000/svg" class="inline-block mr-1 animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#A78BFA" stroke-width="4" opacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#8B5CF6" stroke-width="4" stroke-linecap="round"/></svg>Analizando sugerencias del modelo...</p>
+      </div>
+      <div *ngIf="!validationResult && !analyzingModel">
+        <p class="italic text-gray-400">No hay validaciones aún.</p>
       </div>
 
       <div *ngIf="validationResult">
         <!-- Validas -->
-        <h5>✅ Relaciones válidas</h5>
-        <ul>
-          <li *ngFor="let v of validationResult.analysis.validas">
-            <strong>{{ v.relacion }}</strong><br />
-            <small>{{ v.razon }}</small>
-          </li>
-        </ul>
+        <div>
+          <h5 class="text-green-600 font-semibold mb-1">✅ Relaciones válidas</h5>
+          <ul class="list-disc pl-5 space-y-1">
+            <li *ngFor="let v of validationResult.analysis.validas">
+              <strong>{{ v.relacion }}</strong><br />
+              <small class="text-gray-600">{{ v.razon }}</small>
+            </li>
+          </ul>
+        </div>
 
         <!-- Errores -->
-        <h5>❌ Errores</h5>
-        <ul>
-          <li *ngFor="let e of validationResult.analysis.errores">
-            <strong>{{ e.relacion }}</strong><br />
-            <small>{{ e.problema }}</small><br />
-            <em>Sugerencia: {{ e.sugerencia }}</em>
-          </li>
-        </ul>
+        <div>
+          <h5 class="text-red-600 font-semibold mb-1">❌ Errores</h5>
+          <ul class="list-disc pl-5 space-y-2">
+            <li *ngFor="let e of validationResult.analysis.errores">
+              <strong>{{ e.relacion }}</strong><br />
+              <small class="text-gray-600">{{ e.problema }}</small><br />
+              <em class="text-purple-600">💡 Sugerencia: {{ e.sugerencia }}</em>
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
   </div>

@@ -1,9 +1,10 @@
-import { Component, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Output, EventEmitter, PLATFORM_ID, Inject } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { DragDropModule, CdkDragEnd, CdkDragStart } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
 import { DiagramService } from '../../services/diagram/diagram.service';
 import { UmlValidationService } from '../../services/colaboration/uml-validation.service';
+import { ActivatedRoute, Router } from '@angular/router';
 
 @Component({
   selector: 'app-side-panel',
@@ -19,11 +20,27 @@ export class SidePanel {
   prompt: string = '';
   validationCollapsed = true;
   validationResult: any = null;
-  
+  analyzingModel = false;
+  roomId: string | null = null;
+  copied = false;
+  recognizing = false;
+  recognition: any;
+  isBrowser: boolean;
+
   constructor(
     private diagramService: DiagramService,
-    private umlValidation: UmlValidationService
-  ) {}
+    private umlValidation: UmlValidationService,
+    private router: Router,
+    private route: ActivatedRoute,
+    @Inject(PLATFORM_ID) platformId: Object
+  ) {
+    this.isBrowser = isPlatformBrowser(platformId); // ✅ detecta si estamos en navegador
+    this.roomId = this.route.snapshot.paramMap.get('roomId');
+
+    if (this.isBrowser) {
+      this.configVoiceRecognition();
+    }
+  }
 
   onDragEnded(event: CdkDragEnd) {
     this.elementDragged.emit(event);
@@ -44,14 +61,73 @@ export class SidePanel {
   }
 
   analyzeNow() {
+    this.analyzingModel = true;
     const umlJson = this.diagramService.exportToJson(); // 👈 exporta modelo actual
+    // Simulación de análisis asíncrono, reemplaza por tu lógica real si es necesario
     this.umlValidation.validateModel(umlJson);
   }
 
   // 👉 para recibir resultados desde el padre (diagram)
   updateValidationResult(result: any) {
     this.validationResult = result;
-    //console.log('Resultado de validación recibido:', result);
     this.validationCollapsed = false; // auto-expandir al recibir
+    this.analyzingModel = false;
+  }
+  goHome() {
+    this.diagramService.clearStorage(); // Limpia el diagrama guardado
+    this.diagramService.closeDiagram(this.roomId!); // Cierra conexiones y limpia estado
+    this.router.navigate(['/']); // redirige al inicio
+  }
+  copyRoomCode() {
+    const roomId = this.route.snapshot.paramMap.get('roomId'); // o de donde lo tengas
+    if (!roomId) return;
+
+    navigator.clipboard.writeText(roomId).then(() => {
+      this.copied = true;
+
+      // 🔹 Hace que desaparezca después de 2 segundos
+      setTimeout(() => {
+        this.copied = false;
+      }, 2000);
+    });
+  }
+
+  configVoiceRecognition() {
+    if (!this.isBrowser) return;
+    this.recognition = null;
+    const SpeechRecognition =
+      (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+
+    if (SpeechRecognition) {
+      this.recognition = new SpeechRecognition();
+      this.recognition.lang = 'es-ES';
+      this.recognition.interimResults = true;
+      this.recognition.continuous = false;
+
+      this.recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((result: any) => result[0].transcript)
+          .join('');
+        this.prompt = ' ' + transcript;
+      };
+
+      this.recognition.onend = () => {
+        this.recognizing = false;
+      };
+    }
+  }
+  toggleVoiceInput() {
+    if (!this.recognition) {
+      alert('Tu navegador no soporta reconocimiento de voz');
+      return;
+    }
+
+    if (this.recognizing) {
+      this.recognition.stop();
+      this.recognizing = false;
+    } else {
+      this.recognition.start();
+      this.recognizing = true;
+    }
   }
 }

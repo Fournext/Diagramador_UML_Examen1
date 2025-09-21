@@ -10,6 +10,7 @@ import { DiagramExportService } from '../../services/exports/diagram-export.serv
 import { BackendGeneratorService } from '../../services/exports/backend-generator.service';
 import { ChatbotService } from '../../services/IA/chatbot.service';
 import { UmlValidationService } from '../../services/colaboration/uml-validation.service';
+import { ActivatedRoute } from '@angular/router';
 
 @Component({
   selector: 'app-diagram',
@@ -31,18 +32,17 @@ export class Diagram implements AfterViewInit {
     private exportService: DiagramExportService,
     private backendGen: BackendGeneratorService,
     private chatbot: ChatbotService,
-    private umlValidation: UmlValidationService
+    private umlValidation: UmlValidationService,
+    private route: ActivatedRoute
   ) {}
-
+  
   async ngAfterViewInit(): Promise<void> {
     if (isPlatformBrowser(this.platformId)) {
-      // Ejecutamos dentro de ngZone para asegurar la detección de cambios
       this.ngZone.run(async () => {
         try {
-          // Inicializar el servicio de diagrama con el elemento del canvas
-          await this.diagramService.initialize(this.paperContainer.nativeElement);
+          const roomId = this.route.snapshot.paramMap.get('roomId') || 'default-room';
+          await this.diagramService.initialize(this.paperContainer.nativeElement, roomId);
           
-          // Escuchar el evento de arrastre desde el panel lateral
           this.sidePanel.elementDragged.subscribe((event: CdkDragEnd) => {
             this.onDragEnded(event);
           });
@@ -76,7 +76,7 @@ export class Diagram implements AfterViewInit {
     this.chatbot.generateDiagram(prompt).subscribe({
       next: (json) => {
         console.log('Respuesta del chatbot:', json);
-        this.diagramService.loadFromJson(json);
+        this.diagramService.loadFromJson(json,true);
       },
       error: (err) => {
         console.error('Error al generar diagrama desde chatbot', err);
