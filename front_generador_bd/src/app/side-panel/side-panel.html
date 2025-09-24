@@ -73,9 +73,9 @@
     (click)="copyRoomCode()">
     📋 Copiar código de sala
   </button>
-  <small *ngIf="copied" class="text-green-600 mt-1 block text-center">¡Copiado!</small>
-
-
+  @if (copied() == true) {
+  <small class="text-green-600 mt-1 block text-center">¡Copiado!</small>
+  }
 
   <!-- Chatbot panel -->
   <div class="chatbot-panel bg-white rounded-lg shadow-md p-3 space-y-2">
@@ -90,8 +90,12 @@
       <button
         (click)="toggleVoiceInput()"
         class="px-3 py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600 transition">
-        <span *ngIf="!recognizing">🎤</span>
-        <span *ngIf="recognizing">⏹️</span>
+        @if (recognizing()==true) {
+          <span>⏹️</span>
+        }
+        @else {
+          <span>🎤</span>
+        }
       </button>
     </div>
 

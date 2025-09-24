@@ -1,4 +1,4 @@
-import { Component, Output, EventEmitter, PLATFORM_ID, Inject } from '@angular/core';
+import { Component, Output, EventEmitter, PLATFORM_ID, Inject, signal } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { DragDropModule, CdkDragEnd, CdkDragStart } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
@@ -22,8 +22,8 @@ export class SidePanel {
   validationResult: any = null;
   analyzingModel = false;
   roomId: string | null = null;
-  copied = false;
-  recognizing = false;
+  copied = signal<boolean>(false);
+  recognizing = signal<boolean>(false);
   recognition: any;
   isBrowser: boolean;
 
@@ -81,14 +81,14 @@ export class SidePanel {
   copyRoomCode() {
     const roomId = this.route.snapshot.paramMap.get('roomId'); // o de donde lo tengas
     if (!roomId) return;
-
+    
     navigator.clipboard.writeText(roomId).then(() => {
-      this.copied = true;
+      this.copied.set(true);
 
       // 🔹 Hace que desaparezca después de 2 segundos
       setTimeout(() => {
-        this.copied = false;
-      }, 2000);
+        this.copied.set(false);
+      }, 1000);
     });
   }
 
@@ -108,11 +108,11 @@ export class SidePanel {
         const transcript = Array.from(event.results)
           .map((result: any) => result[0].transcript)
           .join('');
-        this.prompt = ' ' + transcript;
+        this.prompt = transcript;
       };
 
       this.recognition.onend = () => {
-        this.recognizing = false;
+        this.recognizing.set(true);
       };
     }
   }
@@ -122,12 +122,13 @@ export class SidePanel {
       return;
     }
 
-    if (this.recognizing) {
+    if (this.recognizing()) {
       this.recognition.stop();
-      this.recognizing = false;
+      this.recognizing.set(false);
     } else {
       this.recognition.start();
-      this.recognizing = true;
+      this.recognizing.set(true);
     }
   }
+
 }
