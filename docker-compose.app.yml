@@ -33,6 +33,20 @@ services:
     networks:
       - backend
 
+  spring-backend:
+    build: ./back_generator_uml/
+    container_name: spring_backend
+    environment:
+      - SERVER_PORT=7000
+    ports:
+      - "7000:7000"
+
+    depends_on:
+      - angular-app
+    networks:
+      - backend
+      - frontend
+
   angular-app:
     build: ./front_generador_bd/
     container_name: angular_frontend
