@@ -52,8 +52,6 @@ services:
     container_name: angular_frontend
     ports:
       - "4000:4000"
-    environment:
-      - API_URL=http://django:8000
     networks:
       - frontend
       - backend
