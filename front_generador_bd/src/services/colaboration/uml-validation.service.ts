@@ -9,7 +9,7 @@ export class UmlValidationService {
     const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const host =
     window.location.protocol === 'https:'
-    ? 'front-sw1.fournext.me'
+    ? environment.WebSocket_python
     : window.location.hostname;
     
     const port =
