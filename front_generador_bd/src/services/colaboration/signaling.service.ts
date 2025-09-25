@@ -17,7 +17,7 @@ export class SignalingService {
     // Detecta ws:// o wss:// correctamente
     // const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
     // const wsUrl = `${scheme}://${location.hostname}:8000/ws/canvas/${roomId}/`;
-    const scheme = window.location.protocol === 'ws';
+    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const host = window.location.hostname;
     const port = environment.wsPort ? `:${environment.wsPort}` : '';
     const wsUrl = `${scheme}://${host}${port}${environment.wsPath}${roomId}/`;
