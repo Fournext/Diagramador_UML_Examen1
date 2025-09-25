@@ -1,11 +1,15 @@
 import { Injectable } from '@angular/core';
+import { environment } from '../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class UmlValidationService {
   private socket?: WebSocket;
-
+    
     connect(onResult: (data: any) => void) {
-    this.socket = new WebSocket('ws://127.0.0.1:8000/ws/uml/');
+    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const host = window.location.hostname;
+    const port = environment.wsPort ? `:${environment.wsPort}` : '';
+    this.socket = new WebSocket(`${scheme}://${host}${port}/ws/uml/`);
 
     this.socket.onmessage = (msg) => {
         try {
