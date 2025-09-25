@@ -18,8 +18,17 @@ export class SignalingService {
     // const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
     // const wsUrl = `${scheme}://${location.hostname}:8000/ws/canvas/${roomId}/`;
     const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const host = window.location.hostname;
-    const port = environment.wsPort ? `:${environment.wsPort}` : '';
+    const host =
+    window.location.protocol === 'https:'
+    ? 'front-sw1.fournext.me'
+    : window.location.hostname;
+
+    const port =
+    window.location.protocol === 'https:'
+      ? ''
+      : environment.wsPort
+      ? `:${environment.wsPort}`
+      : '';
     const wsUrl = `${scheme}://${host}${port}${environment.wsPath}${roomId}/`;
 
     console.log('[Signaling] Connecting to', wsUrl);

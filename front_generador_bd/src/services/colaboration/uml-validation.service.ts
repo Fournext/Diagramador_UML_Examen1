@@ -7,7 +7,11 @@ export class UmlValidationService {
     
     connect(onResult: (data: any) => void) {
     const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const host = window.location.hostname;
+    const host =
+    window.location.protocol === 'https:'
+    ? 'front-sw1.fournext.me'
+    : window.location.hostname;
+    
     const port =
     window.location.protocol === 'https:'
       ? ''
