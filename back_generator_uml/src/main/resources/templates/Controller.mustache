@@ -21,7 +21,7 @@ public class {{EntityName}}Controller {
     }
 
     @GetMapping("/{id}")
-    public {{EntityName}} one(@PathVariable("id") Long id) {
+    public {{EntityName}} one(@PathVariable("id") {{pkType}} id) {
     return service.findById(id)
     .orElseThrow(() -> new RuntimeException("{{EntityName}} not found with id " + id));
     }
@@ -32,13 +32,15 @@ public class {{EntityName}}Controller {
     }
 
     @PutMapping("/{id}")
-    public {{EntityName}} update(@PathVariable("id") Long id, @RequestBody {{EntityName}} body) {
-    body.setId(id);
+    public {{EntityName}} update(@PathVariable("id") {{pkType}} id, @RequestBody {{EntityName}} body) {
+    {{#hasPk}}
+        body.{{pkSetter}}(id);
+    {{/hasPk}}
     return service.save(body);
     }
 
     @DeleteMapping("/{id}")
-    public void delete(@PathVariable("id") Long id) {
+    public void delete(@PathVariable("id") {{pkType}} id) {
     service.delete(id);
     }
 }

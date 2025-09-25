@@ -10,13 +10,13 @@ import {{basePackage}}.repository.{{EntityName}}Repository;
 @RequiredArgsConstructor
 public class {{EntityName}}Service {
 
-private final {{EntityName}}Repository repository;
+    private final {{EntityName}}Repository repository;
 
-public List<{{EntityName}}> findAll() {
+    public List<{{EntityName}}> findAll() {
     return repository.findAll();
     }
 
-    public Optional<{{EntityName}}> findById(Long id) {
+    public Optional<{{EntityName}}> findById({{pkType}} id) {
     return repository.findById(id);
     }
 
@@ -24,7 +24,7 @@ public List<{{EntityName}}> findAll() {
     return repository.save(e);
     }
 
-    public void delete(Long id) {
+    public void delete({{pkType}} id) {
     repository.deleteById(id);
     }
 }

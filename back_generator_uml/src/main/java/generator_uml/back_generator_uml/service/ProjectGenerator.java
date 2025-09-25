@@ -11,6 +11,7 @@ import org.zeroturnaround.zip.ZipUtil;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -66,7 +67,9 @@ public class ProjectGenerator {
 
             // Atributos
             List<Map<String, Object>> attrs = new ArrayList<>();
-            boolean pkAssigned = false; // Solo una Pk por clase
+            boolean pkAssigned = false;
+            String pkName = null;
+            String pkType = null;
 
             for (var attr : c.getAttributes()) {
                 Map<String, Object> a = new HashMap<>();
@@ -80,12 +83,14 @@ public class ProjectGenerator {
                         || type.equalsIgnoreCase("short")
                         || type.equalsIgnoreCase("byte");
 
-                if (!pkAssigned) { // ✅ solo asignar PK una vez
+                if (!pkAssigned) {
                     if (isNumeric) {
                         a.put("isId", true);
                         a.put("type", "Long");
                         a.put("generated", true);
                         pkAssigned = true;
+                        pkName = name;
+                        pkType = "Long";
                     } else if (type.equalsIgnoreCase("String")
                             || type.equalsIgnoreCase("char")
                             || type.equalsIgnoreCase("Character")) {
@@ -93,12 +98,13 @@ public class ProjectGenerator {
                         a.put("type", "String");
                         a.put("generated", false);
                         pkAssigned = true;
+                        pkName = name;
+                        pkType = "String";
                     } else {
                         a.put("isId", false);
                         a.put("type", type);
                     }
                 } else {
-                    // todos los demás atributos normales
                     a.put("isId", false);
                     a.put("type", type);
                 }
@@ -177,6 +183,23 @@ public class ProjectGenerator {
                         }
                     }
                 }
+                // Si la clase hereda de otra, eliminar atributos duplicados del padre
+                if (parentClass != null) {
+                    final String parentClassName = parentClass;
+                    UmlClass parent = schema.getClasses().stream()
+                            .filter(pc -> NamingUtil.toJavaClass(pc.getName()).equals(parentClassName))
+                            .findFirst()
+                            .orElse(null);
+
+                    if (parent != null) {
+                        final Set<String> parentAttrs = parent.getAttributes().stream()
+                                .map(a -> NamingUtil.toField(a.getName()))
+                                .collect(Collectors.toSet());
+
+                        // eliminar duplicados
+                        attrs.removeIf(a -> parentAttrs.contains((String) a.get("name")));
+                    }
+                }
             }
             // Metodos
             List<Map<String, Object>> methods = new ArrayList<>();
@@ -213,22 +236,23 @@ public class ProjectGenerator {
             entityCtx.put("manyToMany", manyToMany);
             entityCtx.put("parentClass", parentClass);
             entityCtx.put("methods", methods);
+            entityCtx.put("hasPk", pkName != null);
+            if (pkName != null) {
+                String pkSetter = "set" + Character.toUpperCase(pkName.charAt(0)) + pkName.substring(1);
+                entityCtx.put("pkName", pkName);
+                entityCtx.put("pkType", pkType);
+                entityCtx.put("pkSetter", pkSetter);
+            }
+            entityCtx.put("plural", entityName.toLowerCase());
 
             // Render entidad
             render("Entity.mustache", entityCtx, modelDir.resolve(entityName + ".java"));
 
             // Render repository, service y controller
-            render("Repository.mustache", Map.of("basePackage", basePackage, "EntityName", entityName),
-                    repoDir.resolve(entityName + "Repository.java"));
+            render("Repository.mustache", entityCtx, repoDir.resolve(entityName + "Repository.java"));
 
-            render("Service.mustache", Map.of("basePackage", basePackage, "EntityName", entityName),
-                    svcDir.resolve(entityName + "Service.java"));
-
-            render("Controller.mustache", Map.of(
-                    "basePackage", basePackage,
-                    "EntityName", entityName,
-                    "plural", NamingUtil.plural(NamingUtil.toField(entityName))
-            ), ctrlDir.resolve(entityName + "Controller.java"));
+            render("Service.mustache", entityCtx, svcDir.resolve(entityName + "Service.java"));
+            render("Controller.mustache", entityCtx, ctrlDir.resolve(entityName + "Controller.java"));
         }
 
         Path zip = root.getParent().resolve(artifactId + ".zip");
