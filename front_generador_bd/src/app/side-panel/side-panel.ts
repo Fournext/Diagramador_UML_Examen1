@@ -79,17 +79,37 @@ export class SidePanel {
     this.router.navigate(['/']); // redirige al inicio
   }
   copyRoomCode() {
-    const roomId = this.route.snapshot.paramMap.get('roomId'); // o de donde lo tengas
+    const roomId = this.route.snapshot.paramMap.get('roomId');
     if (!roomId) return;
-    
-    navigator.clipboard.writeText(roomId).then(() => {
-      this.copied.set(true);
 
-      // 🔹 Hace que desaparezca después de 2 segundos
-      setTimeout(() => {
-        this.copied.set(false);
-      }, 1000);
-    });
+    const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
+
+    if (isSecure && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(roomId).then(() => {
+        this.copied.set(true);
+        setTimeout(() => this.copied.set(false), 2000);
+      }).catch(() => this.fallbackCopy(roomId));
+    } else {
+      this.fallbackCopy(roomId);
+    }
+  }
+
+  private fallbackCopy(text: string) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      this.copied.set(true);
+      setTimeout(() => this.copied.set(false), 2000);
+    } catch (err) {
+      console.error('Fallback copy failed', err);
+    }
+    document.body.removeChild(textarea);
   }
 
   configVoiceRecognition() {
