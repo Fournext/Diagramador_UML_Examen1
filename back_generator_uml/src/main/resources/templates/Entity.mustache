@@ -11,6 +11,9 @@ import java.util.*;
 @Data
 @NoArgsConstructor
 @SuperBuilder
+{{#isParent}}
+    @Inheritance(strategy = InheritanceType.JOINED)
+{{/isParent}}
 public class {{EntityName}}{{#parentClass}} extends {{parentClass}}{{/parentClass}} {
 
 {{#attributes}}

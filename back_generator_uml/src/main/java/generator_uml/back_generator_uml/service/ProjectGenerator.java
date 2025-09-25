@@ -68,8 +68,23 @@ public class ProjectGenerator {
             // Atributos
             List<Map<String, Object>> attrs = new ArrayList<>();
             boolean pkAssigned = false;
+            String parentClass = null;
             String pkName = null;
             String pkType = null;
+
+            if (schema.getRelationships() != null) {
+                for (var rel : schema.getRelationships()) {
+                    if ("generalization".equals(rel.getType()) && rel.getSourceId().equals(c.getId())) {
+                        parentClass = schema.getClasses().stream()
+                                .filter(pc -> pc.getId().equals(rel.getTargetId()))
+                                .map(UmlClass::getName)
+                                .map(NamingUtil::toJavaClass)
+                                .findFirst()
+                                .orElse(null);
+                    }
+                }
+            }
+            boolean isChild = parentClass != null;
 
             for (var attr : c.getAttributes()) {
                 Map<String, Object> a = new HashMap<>();
@@ -83,7 +98,7 @@ public class ProjectGenerator {
                         || type.equalsIgnoreCase("short")
                         || type.equalsIgnoreCase("byte");
 
-                if (!pkAssigned) {
+                if (!isChild && !pkAssigned)  {
                     if (isNumeric) {
                         a.put("isId", true);
                         a.put("type", "Long");
@@ -118,7 +133,6 @@ public class ProjectGenerator {
             List<Map<String, Object>> manyToOne = new ArrayList<>();
             List<Map<String, Object>> oneToOne = new ArrayList<>();
             List<Map<String, Object>> manyToMany = new ArrayList<>();
-            String parentClass = null;
 
             if (schema.getRelationships() != null) {
                 for (var rel : schema.getRelationships()) {
@@ -224,6 +238,8 @@ public class ProjectGenerator {
                 methods.add(mm);
             }
 
+            boolean isParent = schema.getRelationships().stream()
+                    .anyMatch(r -> "generalization".equals(r.getType()) && r.getTargetId().equals(c.getId()));
 
             // Contexto para la entidad
             Map<String, Object> entityCtx = new HashMap<>();
@@ -237,22 +253,44 @@ public class ProjectGenerator {
             entityCtx.put("parentClass", parentClass);
             entityCtx.put("methods", methods);
             entityCtx.put("hasPk", pkName != null);
-            if (pkName != null) {
+            entityCtx.put("isParent", isParent);
+            entityCtx.put("plural", entityName.toLowerCase());
+
+            if (isChild) {
+                final String parentClassName = parentClass;
+                UmlClass parent = schema.getClasses().stream()
+                        .filter(pc -> NamingUtil.toJavaClass(pc.getName()).equals(parentClassName))
+                        .findFirst()
+                        .orElse(null);
+
+                if (parent != null && !parent.getAttributes().isEmpty()) {
+                    String parentPkName = NamingUtil.toField(parent.getAttributes().get(0).getName());
+                    String parentPkType = TypeMapper.toJava(parent.getAttributes().get(0).getType());
+                    String pkSetter = "set" + Character.toUpperCase(parentPkName.charAt(0)) + parentPkName.substring(1);
+
+                    entityCtx.put("pkName", parentPkName);
+                    entityCtx.put("pkType", parentPkType);
+                    entityCtx.put("pkSetter", pkSetter);
+                    entityCtx.put("hasPk", true);
+                }
+            } else if (pkName != null) {
                 String pkSetter = "set" + Character.toUpperCase(pkName.charAt(0)) + pkName.substring(1);
                 entityCtx.put("pkName", pkName);
                 entityCtx.put("pkType", pkType);
                 entityCtx.put("pkSetter", pkSetter);
+                entityCtx.put("hasPk", true);
+            } else {
+                entityCtx.put("hasPk", false);
             }
-            entityCtx.put("plural", entityName.toLowerCase());
 
             // Render entidad
             render("Entity.mustache", entityCtx, modelDir.resolve(entityName + ".java"));
 
             // Render repository, service y controller
             render("Repository.mustache", entityCtx, repoDir.resolve(entityName + "Repository.java"));
-
             render("Service.mustache", entityCtx, svcDir.resolve(entityName + "Service.java"));
             render("Controller.mustache", entityCtx, ctrlDir.resolve(entityName + "Controller.java"));
+
         }
 
         Path zip = root.getParent().resolve(artifactId + ".zip");
