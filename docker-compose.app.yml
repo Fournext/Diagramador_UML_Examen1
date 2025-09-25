@@ -26,7 +26,7 @@ services:
       - frontend
 
   redis:
-    image: redis:7
+    image: public.ecr.aws/docker/library/redis:7
     container_name: redis_server
     ports:
       - "6379:6379"
