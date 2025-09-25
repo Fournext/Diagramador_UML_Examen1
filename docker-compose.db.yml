@@ -22,7 +22,7 @@ services:
       - backend
 
   pgadmin:
-    image: public.ecr.aws/docker/library/dpage/pgadmin4:latest
+    image: dpage/pgadmin4:latest 
     container_name: pgadmin
     restart: always
     environment:
