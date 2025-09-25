@@ -8,7 +8,13 @@ export class UmlValidationService {
     connect(onResult: (data: any) => void) {
     const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const host = window.location.hostname;
-    const port = environment.wsPort ? `:${environment.wsPort}` : '';
+    const port =
+    window.location.protocol === 'https:'
+      ? ''
+      : environment.wsPort
+      ? `:${environment.wsPort}`
+      : '';
+
     this.socket = new WebSocket(`${scheme}://${host}${port}/ws/uml/`);
 
     this.socket.onmessage = (msg) => {
