@@ -78,7 +78,7 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS = True
 
 CSRF_TRUSTED_ORIGINS = [
-    "http://ec2-34-228-19-253.compute-1.amazonaws.com",
+    "http://ec2-3-84-241-46.compute-1.amazonaws.com",
     "http://localhost:4000",
     "http://angular-app:4000"
 ]
