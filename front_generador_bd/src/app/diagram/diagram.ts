@@ -170,5 +170,16 @@ export class Diagram implements AfterViewInit {
 
     });
   }
+  zoomIn() {
+    this.diagramService.zoomIn();
+  }
+
+  zoomOut() {
+    this.diagramService.zoomOut();
+  }
+
+  resetZoom() {
+    this.diagramService.resetZoom();
+  }
 }
 

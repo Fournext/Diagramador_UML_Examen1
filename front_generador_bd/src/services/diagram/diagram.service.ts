@@ -15,6 +15,14 @@ export class DiagramService {
 	private paper: any;
 	private selectedCell: any = null;
 	private storageKey = '';
+	private currentScale = 1; // escala inicial
+	private minScale = 0.2;   // zoom out máximo
+	private maxScale = 2;     // zoom in máximo
+	private zoomStep = 0.1;   // incremento
+	private pan = { x: 0, y: 0 };
+	private isPanning = false;
+	private lastPos = { x: 0, y: 0 };
+
 
 	constructor(
 		private edition: EditionService,
@@ -48,6 +56,49 @@ export class DiagramService {
 				defaultConnector: { name: 'rounded' },
 				defaultLink: () => this.buildRelationship(),
 				validateConnection: (cvS: any, _mS: any, cvT: any, _mT: any) => cvS !== cvT,
+			});
+			paperElement.addEventListener('wheel', (evt: WheelEvent) => {
+				if (evt.ctrlKey) { // solo cuando mantienes Ctrl
+					evt.preventDefault();
+					if (evt.deltaY < 0) {
+					this.zoomIn();
+					} else {
+					this.zoomOut();
+					}
+				}
+			});
+			paperElement.addEventListener('mousedown', (evt: MouseEvent) => {
+				if (evt.button === 2) { // botón derecho
+					this.isPanning = true;
+					this.lastPos = { x: evt.clientX, y: evt.clientY };
+					paperElement.style.cursor = 'grab'; // cambia cursor a mano
+					evt.preventDefault();
+				}
+			});
+
+			paperElement.addEventListener('mousemove', (evt: MouseEvent) => {
+				if (this.isPanning) {
+					const dx = evt.clientX - this.lastPos.x;
+					const dy = evt.clientY - this.lastPos.y;
+					this.lastPos = { x: evt.clientX, y: evt.clientY };
+					this.pan.x += dx;
+					this.pan.y += dy;
+
+					// mueve el paper
+					this.paper.translate(this.pan.x, this.pan.y);
+				}
+			});
+
+			paperElement.addEventListener('mouseup', () => {
+				if (this.isPanning) {
+					this.isPanning = false;
+					paperElement.style.cursor = 'default'; // vuelve al normal
+				}
+			});
+
+			// evita menú contextual al hacer click derecho
+			paperElement.addEventListener('contextmenu', (evt: MouseEvent) => {
+				evt.preventDefault();
 			});
 
 			/**************************************************************************************************
@@ -329,6 +380,11 @@ export class DiagramService {
 				});
 				this.edition.startEditingLabel(model, this.paper, newIndex, 'label', x, y, this.collab,this.graph);
 			});
+
+			// Aplicar zoom y pan inicial
+			this.paper.scale(this.currentScale, this.currentScale);
+			this.paper.translate(this.pan.x, this.pan.y);
+
 
 			// 👉 inicializa colaboración **ANTES** de salir
 			this.collab.registerDiagramApi({
@@ -833,6 +889,27 @@ export class DiagramService {
 			});
 		}
 		
+	}
+	zoomIn() {
+		this.currentScale = Math.min(this.currentScale + this.zoomStep, this.maxScale);
+		this.applyZoom();
+	}
+
+	zoomOut() {
+		this.currentScale = Math.max(this.currentScale - this.zoomStep, this.minScale);
+		this.applyZoom();
+	}
+
+	resetZoom() {
+		this.currentScale = 1;
+		this.applyZoom();
+	}
+
+	private applyZoom() {
+		if (this.paper) {
+			this.paper.scale(this.currentScale, this.currentScale);
+			this.paper.translate(this.pan.x, this.pan.y);
+		}
 	}
 
 }

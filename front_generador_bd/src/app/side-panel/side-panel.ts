@@ -18,9 +18,9 @@ export class SidePanel {
   @Output() generateClicked = new EventEmitter<string>();
 
   prompt: string = '';
-  validationCollapsed = true;
-  validationResult: any = null;
-  analyzingModel = false;
+  validationCollapsed = signal<boolean>(true);
+  validationResult = signal<any>(null);
+  analyzingModel = signal<boolean>(false);
   roomId: string | null = null;
   copied = signal<boolean>(false);
   recognizing = signal<boolean>(false);
@@ -47,31 +47,33 @@ export class SidePanel {
     event.source.reset();
   }
   onSaveClicked() {
-    this.saveClicked.emit(); // 👈 dispara evento al padre
+    this.saveClicked.emit();
   }
   onGenerate() {
     if (this.prompt.trim()) {
       this.generateClicked.emit(this.prompt.trim());
-      this.prompt = ''; // limpiar input
+      this.prompt = ''; 
     }
   }
-  // 👉 para colapsar el panel
+  // para colapsar el panel
   toggleValidationPanel() {
-    this.validationCollapsed = !this.validationCollapsed;
+    this.validationCollapsed.set(!this.validationCollapsed());
   }
 
   analyzeNow() {
-    this.analyzingModel = true;
-    const umlJson = this.diagramService.exportToJson(); // 👈 exporta modelo actual
-    // Simulación de análisis asíncrono, reemplaza por tu lógica real si es necesario
+    this.analyzingModel.set(true);
+    const umlJson = this.diagramService.exportToJson(); 
     this.umlValidation.validateModel(umlJson);
   }
 
-  // 👉 para recibir resultados desde el padre (diagram)
+  // para recibir resultados desde el padre (diagram)
   updateValidationResult(result: any) {
-    this.validationResult = result;
-    this.validationCollapsed = false; // auto-expandir al recibir
-    this.analyzingModel = false;
+    this.validationResult.set(result);
+    this.analyzingModel.set(false);
+    if (this.validationCollapsed()) {
+      this.validationCollapsed.set(false); // abrir solo si estaba cerrado
+    }
+    //this.analyzingModel = false;
   }
   goHome() {
     this.diagramService.clearStorage(); // Limpia el diagrama guardado
