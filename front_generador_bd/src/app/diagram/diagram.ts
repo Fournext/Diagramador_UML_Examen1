@@ -22,6 +22,8 @@ import { ActivatedRoute } from '@angular/router';
 export class Diagram implements AfterViewInit {
   @ViewChild('paperContainer', { static: true }) paperContainer!: ElementRef;
   @ViewChild(SidePanel) sidePanel!: SidePanel;
+
+  private lastMousePos: { x: number; y: number } | null = null;
   
   constructor(
     @Inject(PLATFORM_ID) private platformId: Object,
@@ -63,6 +65,20 @@ export class Diagram implements AfterViewInit {
         }
       });
     }
+      // Guardar la posición del mouse sobre el canvas
+      if (this.paperContainer?.nativeElement) {
+        this.paperContainer.nativeElement.addEventListener('mousemove', (evt: MouseEvent) => {
+          const rect = this.paperContainer.nativeElement.getBoundingClientRect();
+          this.lastMousePos = {
+            x: evt.clientX - rect.left,
+            y: evt.clientY - rect.top
+          };
+        });
+        // Si el mouse sale del canvas, limpiar la posición
+        this.paperContainer.nativeElement.addEventListener('mouseleave', () => {
+          this.lastMousePos = null;
+        });
+      }
   }
   saveDiagram() {
     const json = this.exportService.export(this.diagramService.getGraph());
@@ -92,6 +108,38 @@ export class Diagram implements AfterViewInit {
     if (event.key === 'Escape') {
       this.diagramService.clearSelection();
     }
+      // Atajos globales copiar, pegar, duplicar, cortar
+      if (event.ctrlKey && event.key === 'c') {
+        this.diagramService.clipboard = this.diagramService['copyUmlClass']?.(this.diagramService['selectedCell']);
+        this.diagramService.clearSelection();
+        event.preventDefault();
+      }
+        if (event.ctrlKey && event.key === 'v') {
+          this.diagramService.clearSelection();
+          if (this.diagramService.clipboard) {
+            // Si hay posición de mouse, pegar ahí
+            if (this.lastMousePos) {
+              const model = { ...this.diagramService.clipboard, position: { ...this.lastMousePos } };
+              this.diagramService['pasteUmlClass']?.(model);
+            } else {
+              this.diagramService['pasteUmlClass']?.(this.diagramService.clipboard);
+            }
+            this.diagramService.clearSelection();
+          }
+          event.preventDefault();
+        }
+      if (event.ctrlKey && event.key === 'x') {
+        this.diagramService.clipboard = this.diagramService['copyUmlClass']?.(this.diagramService['selectedCell']);
+        this.diagramService.deleteSelected();
+        this.diagramService.clearSelection();
+        event.preventDefault();
+      }
+      if (event.ctrlKey && event.key === 'd') {
+        const clone = this.diagramService['copyUmlClass']?.(this.diagramService['selectedCell']);
+        this.diagramService.clearSelection();
+        this.diagramService['pasteUmlClass']?.(clone);
+        event.preventDefault();
+      }
   }
   
   @HostListener('window:resize')

@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { DiagramService } from '../../services/diagram/diagram.service';
 import { UmlValidationService } from '../../services/colaboration/uml-validation.service';
 import { ActivatedRoute, Router } from '@angular/router';
+import { SqlExportService } from '../../services/exports/sql-export.service';
 
 @Component({
   selector: 'app-side-panel',
@@ -16,6 +17,8 @@ export class SidePanel {
   @Output() elementDragged = new EventEmitter<CdkDragEnd>();
   @Output() saveClicked = new EventEmitter<void>(); 
   @Output() generateClicked = new EventEmitter<string>();
+
+  public showActions: boolean = false;
 
   prompt: string = '';
   validationCollapsed = signal<boolean>(true);
@@ -32,6 +35,7 @@ export class SidePanel {
     private umlValidation: UmlValidationService,
     private router: Router,
     private route: ActivatedRoute,
+    private sqlExportService: SqlExportService,
     @Inject(PLATFORM_ID) platformId: Object
   ) {
     this.isBrowser = isPlatformBrowser(platformId); // ✅ detecta si estamos en navegador
@@ -151,6 +155,13 @@ export class SidePanel {
       this.recognition.start();
       this.recognizing.set(true);
     }
+  }
+  exportImage() {
+    this.diagramService.exportToImage('diagrama.png');
+  }
+  exportSql() {
+    const umlJson = this.diagramService.exportToJson();
+    this.sqlExportService.downloadSql(umlJson, 'diagrama.sql');
   }
 
 }

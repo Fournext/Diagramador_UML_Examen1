@@ -22,6 +22,7 @@ export class DiagramService {
 	private pan = { x: 0, y: 0 };
 	private isPanning = false;
 	private lastPos = { x: 0, y: 0 };
+	public clipboard: any = null;
 
 
 	constructor(
@@ -57,6 +58,46 @@ export class DiagramService {
 				defaultLink: () => this.buildRelationship(),
 				validateConnection: (cvS: any, _mS: any, cvT: any, _mT: any) => cvS !== cvT,
 			});
+			/**************************************************************************************************
+			 * ATAJOS DE TECLADO: copiar, pegar, duplicar, cortar
+			 ***************************************************************************************************/
+			let clipboard: any = null;
+
+			paperElement.addEventListener('keydown', (evt: KeyboardEvent) => {
+				if (!this.selectedCell) return;
+				if (evt.ctrlKey && evt.key === 'c') {
+					// Copiar
+					clipboard = this.copyUmlClass(this.selectedCell);
+					console.log('Clase copiada');
+					evt.preventDefault();
+				}
+				if (evt.ctrlKey && evt.key === 'v') {
+					// Pegar
+					if (clipboard) {
+						this.pasteUmlClass(clipboard);
+						console.log('Clase pegada');
+					}
+					evt.preventDefault();
+				}
+				if (evt.ctrlKey && evt.key === 'x') {
+					// Cortar
+					clipboard = this.copyUmlClass(this.selectedCell);
+					this.deleteSelected();
+					console.log('Clase cortada');
+					evt.preventDefault();
+				}
+				if (evt.ctrlKey && evt.key === 'd') {
+					// Duplicar
+					const clone = this.copyUmlClass(this.selectedCell);
+					this.pasteUmlClass(clone);
+					console.log('Clase duplicada');
+					evt.preventDefault();
+				}
+			});
+
+			// Para que el canvas reciba los eventos de teclado
+			paperElement.tabIndex = 0;
+			paperElement.style.outline = 'none';
 			paperElement.addEventListener('wheel', (evt: WheelEvent) => {
 				if (evt.ctrlKey) { // solo cuando mantienes Ctrl
 					evt.preventDefault();
@@ -555,6 +596,27 @@ export class DiagramService {
 		this.selectedCell = null;
 	}
 
+	// Copiar clase UML seleccionada
+	private copyUmlClass(cell: any): UmlClass | null {
+		if (!cell?.isElement?.()) return null;
+		return {
+			id: undefined, // Nueva copia
+			name: cell.get('name'),
+			position: { x: cell.position().x + 30, y: cell.position().y + 30 }, // desplazada
+			size: cell.size(),
+			attributes: cell.get('attributes'),
+			methods: cell.get('methods'),
+		};
+	}
+
+	// Pegar clase UML desde el portapapeles
+	private pasteUmlClass(classModel: UmlClass | null) {
+		if (!classModel) return;
+		const newClass = this.createUmlClass(classModel);
+		newClass.toFront();
+		this.selectedCell = newClass;
+	}
+
 	clearSelection() {
 		if (this.selectedCell?.isElement?.()) {
 			this.selectedCell.attr('.uml-outer/stroke', '#2196f3');
@@ -910,6 +972,56 @@ export class DiagramService {
 			this.paper.scale(this.currentScale, this.currentScale);
 			this.paper.translate(this.pan.x, this.pan.y);
 		}
+	}
+	exportToImage(fileName: string = 'diagram.png') {
+		if (!this.paper) {
+			console.error('❌ Paper no inicializado');
+			return;
+		}
+
+		// Clonar el nodo SVG actual
+		const svgElement = this.paper.svg.cloneNode(true) as SVGSVGElement;
+
+		// ❌ Eliminar elementos no deseados (handles, herramientas, puertos)
+		svgElement.querySelectorAll(
+			'.marker-vertices, .marker-arrowheads, .link-tools, .tool, .connection-wrap'
+		).forEach(el => el.remove());
+
+		// Ajustar tamaño al contenido
+		const bbox = this.paper.getContentBBox();
+		svgElement.setAttribute("width", `${bbox.width}`);
+		svgElement.setAttribute("height", `${bbox.height}`);
+		svgElement.setAttribute("viewBox", `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
+
+		// Convertir a string
+		const serializer = new XMLSerializer();
+		const svgString = serializer.serializeToString(svgElement);
+
+		// Crear imagen
+		const img = new Image();
+		const url = URL.createObjectURL(new Blob([svgString], { type: "image/svg+xml;charset=utf-8" }));
+
+		img.onload = () => {
+			const canvas = document.createElement("canvas");
+			canvas.width = bbox.width;
+			canvas.height = bbox.height;
+
+			const ctx = canvas.getContext("2d");
+			if (ctx) ctx.drawImage(img, 0, 0);
+
+			canvas.toBlob((blob) => {
+			if (!blob) return;
+			const a = document.createElement("a");
+			a.href = URL.createObjectURL(blob);
+			a.download = fileName;
+			a.click();
+			URL.revokeObjectURL(a.href);
+			}, "image/png");
+
+			URL.revokeObjectURL(url);
+		};
+
+		img.src = url;
 	}
 
 }

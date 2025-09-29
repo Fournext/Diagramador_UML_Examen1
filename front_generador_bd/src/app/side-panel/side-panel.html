@@ -25,15 +25,35 @@
       cdkDrag
       [cdkDragData]="{ type: 'association' }"
       (cdkDragEnded)="onDragEnded($event)">
-      🔗 <span class="ml-1">Asociación</span>
+       <div class="flex items-center gap-4 w-full justify-center py-1">
+          <span class="inline-block align-middle" style="width:100px;height:28px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="103%" height="100%" viewBox="25 -5 165 20">
+              <g>
+                <path d="M 7 7 L 158.88 7" fill="none" stroke="#222" stroke-width="2.8" stroke-miterlimit="10" pointer-events="stroke"/>
+                <path d="M 165.88 7 L 158.88 10.5 L 158.88 3.5 Z" fill="none" stroke="#222" stroke-width="2.8" stroke-miterlimit="10" pointer-events="all"/>
+              </g>
+            </svg>
+          </span>
+          <span class="font-semibold text-base text-gray-900">Asociación</span>
+        </div>
     </div>
 
     <div
-      class="palette-item cursor-pointer bg-white border rounded-lg shadow-sm px-3 py-2 hover:bg-purple-50 transition"
+      class="palette-item cursor-pointer bg-white border rounded-lg shadow-sm px-3 py-2 hover:bg-purple-50 transition flex items-center"
       cdkDrag
       [cdkDragData]="{ type: 'generalization' }"
       (cdkDragEnded)="onDragEnded($event)">
-      ⬆️ <span class="ml-1">Herencia</span>
+        <div class="flex items-center gap-7 w-full justify-center py-1">
+          <span class="inline-block align-middle" style="width:100px;height:28px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="25 5 165 20">
+              <g>
+                <path d="M 24 18 L 150 18" fill="none" stroke="#222" stroke-width="2.8" stroke-miterlimit="10" pointer-events="stroke"/>
+                <path d="M 170 18 L 150 28 L 150 8 Z" fill="none" stroke="#222" stroke-width="2.8" stroke-miterlimit="10" pointer-events="all"/>
+              </g>
+            </svg>
+          </span>
+          <span class="font-semibold text-base text-gray-900">Herencia</span>
+        </div>
     </div>
 
     <div
@@ -41,7 +61,17 @@
       cdkDrag
       [cdkDragData]="{ type: 'aggregation' }"
       (cdkDragEnded)="onDragEnded($event)">
-      ◇ <span class="ml-1">Agregación</span>
+        <div class="flex items-center gap-4 w-full justify-center py-1">
+          <span class="inline-block align-middle" style="width:100px;height:28px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="110%" height="100%" viewBox="25 5 165 20">
+              <g>
+                <path d="M 32 18 L 140 18" fill="none" stroke="#222" stroke-width="2.8" stroke-miterlimit="10" pointer-events="stroke" />
+                <polygon points="160,18 150,28 140,18 150,8" fill="#fff" stroke="#222" stroke-width="2.8" />
+              </g>
+            </svg>
+          </span>
+          <span class="font-semibold text-base text-gray-900">Agregación</span>
+        </div>
     </div>
 
     <div
@@ -49,32 +79,72 @@
       cdkDrag
       [cdkDragData]="{ type: 'composition' }"
       (cdkDragEnded)="onDragEnded($event)">
-      ◆ <span class="ml-1">Composición</span>
+        <div class="flex items-center gap-4 w-full justify-center py-1">
+          <span class="inline-block align-middle" style="width:100px;height:20px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="115%" height="100%" viewBox="20 5 165 20">
+              <g>
+                <path d="M 32 18 L 140 18" fill="none" stroke="#222" stroke-width="2.8" stroke-miterlimit="10" pointer-events="stroke" />
+                <polygon points="160,18 150,28 140,18 150,8" fill="#222" stroke="#222" stroke-width="2.8" />
+              </g>
+            </svg>
+          </span>
+          <span class="font-semibold text-base text-gray-900">Composición</span>
+        </div>
     </div>
 
     <div
-      class="palette-item cursor-pointer bg-white border rounded-lg shadow-sm px-3 py-2 hover:bg-purple-50 transition"
+      class="palette-item cursor-pointer bg-white border rounded-lg shadow-sm px-3 py-2 hover:bg-purple-50 transition flex items-center"
       cdkDrag
       [cdkDragData]="{ type: 'dependency' }"
       (cdkDragEnded)="onDragEnded($event)">
-      ⋯ <span class="ml-1">Dependencia</span>
+        <div class="flex items-center gap-4 w-full justify-center py-1">
+          <span class="inline-block align-middle" style="width:100px;height:28px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="110%" height="100%" viewBox="20 5 165 20">
+              <g>
+                <path d="M 32 18 L 150 18" fill="none" stroke="#888" stroke-width="2.8" stroke-miterlimit="10" stroke-dasharray="4 3" pointer-events="stroke" />
+                <path d="M 170 18 L 150 28 L 150 8 Z" fill="none" stroke="#888" stroke-width="2.8" stroke-miterlimit="10" pointer-events="all" />
+              </g>
+            </svg>
+          </span>
+          <span class="font-semibold text-base text-gray-900">Dependencia</span>
+        </div>
     </div>
   </div>
 
-  <!-- Botón guardar -->
-  <button
-    class="w-full bg-blue-500 text-white rounded-lg py-2 font-medium hover:bg-blue-600 transition"
-    (click)="onSaveClicked()">
-    💾 Exportar a Backend
-  </button>
 
+  <!-- Menú comprimido de acciones -->
+  <div class="w-full">
+    <button class="w-full bg-gray-200 text-gray-800 rounded-lg py-2 font-medium mb-2 flex items-center justify-center gap-1" (click)="showActions = !showActions">
+      <span class="text-center">Exportaciones</span>
+      <span>{{ showActions ? '▲' : '▼' }}</span>
+    </button>
+    @if (showActions) {
+      <div class="space-y-2">
+        <button
+          class="w-full bg-blue-500 text-white rounded-lg py-2 font-medium hover:bg-blue-600 transition"
+          (click)="onSaveClicked()">
+          💾 Exportar a Backend
+        </button>
+        <button
+          class="w-full bg-green-500 text-white rounded-lg py-2 font-medium hover:bg-green-600 transition"
+          (click)="exportImage()">
+          🖼️ Exportar como Imagen
+        </button>
+        <button
+          class="w-full bg-yellow-500 text-white rounded-lg py-2 font-medium hover:bg-yellow-600 transition"
+          (click)="exportSql()">
+          💽 Exportar como SQL
+        </button>
+      </div>
+    }
+  </div>
   <button
-    class="w-full mt-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg py-2 font-medium shadow-md transition"
+    class="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-lg py-2 font-medium shadow-md transition"
     (click)="copyRoomCode()">
     📋 Copiar código de sala
   </button>
   @if (copied() == true) {
-  <small class="text-green-600 mt-1 block text-center">¡Copiado!</small>
+    <small class="text-green-600 mt-1 block text-center">¡Copiado!</small>
   }
 
   <!-- Chatbot panel -->
