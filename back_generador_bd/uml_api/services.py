@@ -34,7 +34,7 @@ El JSON **debe seguir exactamente** esta estructura:
   "relationships": [
     {{
       "id": "uuid",
-      "type": "association | generalization | aggregation | composition",
+      "type": "association | generalization | aggregation | composition | dependency",
       "sourceId": "uuid",
       "targetId": "uuid",
       "labels": ["1..*", "1"]

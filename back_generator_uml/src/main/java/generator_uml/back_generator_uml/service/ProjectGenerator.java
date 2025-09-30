@@ -26,7 +26,7 @@ public class ProjectGenerator {
         Files.createDirectories(srcMain);
         Files.createDirectories(srcRes);
 
-        // Generar pom.xml y Application.java
+        // pom y Application
         render("pom.mustache", Map.of(
                 "groupId", "com.example",
                 "artifactId", artifactId,
@@ -36,7 +36,7 @@ public class ProjectGenerator {
         render("Application.mustache", Map.of("basePackage", basePackage),
                 srcMain.resolve("GenAppApplication.java"));
 
-        // Generar application.properties
+        // application.properties
         Map<String, Object> props = Map.of(
                 "serverPort", 9000,
                 "dbHost", "localhost",
@@ -49,29 +49,24 @@ public class ProjectGenerator {
         );
         render("application-properties.mustache", props, srcRes.resolve("application.properties"));
 
-        // Carpetas para entity, repo, service, controller
+        // carpetas
         Path modelDir = srcMain.resolve("model");
-        Path repoDir = srcMain.resolve("repository");
-        Path svcDir = srcMain.resolve("service");
-        Path ctrlDir = srcMain.resolve("controller");
+        Path repoDir  = srcMain.resolve("repository");
+        Path svcDir   = srcMain.resolve("service");
+        Path ctrlDir  = srcMain.resolve("controller");
         Files.createDirectories(modelDir);
         Files.createDirectories(repoDir);
         Files.createDirectories(svcDir);
         Files.createDirectories(ctrlDir);
 
-        //Normalizar Clases
+        // normalizar
         schema = JsonNormalizer.normalize(schema);
-        // Procesar clases
+
         for (UmlClass c : schema.getClasses()) {
             String entityName = NamingUtil.toJavaClass(c.getName());
 
-            // Atributos
-            List<Map<String, Object>> attrs = new ArrayList<>();
-            boolean pkAssigned = false;
+            // ====== DETECTAR PADRE (herencia) ANTES ======
             String parentClass = null;
-            String pkName = null;
-            String pkType = null;
-
             if (schema.getRelationships() != null) {
                 for (var rel : schema.getRelationships()) {
                     if ("generalization".equals(rel.getType()) && rel.getSourceId().equals(c.getId())) {
@@ -86,6 +81,12 @@ public class ProjectGenerator {
             }
             boolean isChild = parentClass != null;
 
+            // ====== ATRIBUTOS (PK dinámica: num -> Long autoinc, String -> PK sin autoinc) ======
+            List<Map<String, Object>> attrs = new ArrayList<>();
+            boolean pkAssigned = false;
+            String pkName = null;
+            String pkType = null;
+
             for (var attr : c.getAttributes()) {
                 Map<String, Object> a = new HashMap<>();
                 String type = TypeMapper.toJava(attr.getType());
@@ -98,7 +99,7 @@ public class ProjectGenerator {
                         || type.equalsIgnoreCase("short")
                         || type.equalsIgnoreCase("byte");
 
-                if (!isChild && !pkAssigned)  {
+                if (!isChild && !pkAssigned) {
                     if (isNumeric) {
                         a.put("isId", true);
                         a.put("type", "Long");
@@ -123,16 +124,19 @@ public class ProjectGenerator {
                     a.put("isId", false);
                     a.put("type", type);
                 }
-
                 a.put("name", name);
                 attrs.add(a);
             }
 
-            // Relaciones
+            // ====== RELACIONES ======
             List<Map<String, Object>> oneToMany = new ArrayList<>();
             List<Map<String, Object>> manyToOne = new ArrayList<>();
-            List<Map<String, Object>> oneToOne = new ArrayList<>();
+            List<Map<String, Object>> oneToOne  = new ArrayList<>();
             List<Map<String, Object>> manyToMany = new ArrayList<>();
+            boolean needsOnDeleteImport = false;
+
+            // Para eliminar atributos ‘xxxId’ redundantes si hay relación
+            Set<String> fkPlaceholderNames = new HashSet<>();
 
             if (schema.getRelationships() != null) {
                 for (var rel : schema.getRelationships()) {
@@ -151,33 +155,79 @@ public class ProjectGenerator {
                     String sourceEntity = NamingUtil.toJavaClass(sourceName);
                     String targetEntity = NamingUtil.toJavaClass(targetName);
 
-                    // ---- Generalization (Herencia) ----
                     if ("generalization".equals(rel.getType()) && rel.getSourceId().equals(c.getId())) {
                         parentClass = targetEntity;
                     }
 
-                    // ---- Asociaciones ----
-                    if ("association".equals(rel.getType()) || "aggregation".equals(rel.getType()) || "composition".equals(rel.getType())) {
-                        boolean sourceIsMany = rel.getLabels().stream().findFirst().orElse("1").contains("*");
-                        boolean targetIsMany = rel.getLabels().size() > 1 && rel.getLabels().get(1).contains("*");
+                    // ---- Asociaciones / Agregación / Composición / Dependencia ----
+                    if ("association".equals(rel.getType())
+                            || "aggregation".equals(rel.getType())
+                            || "composition".equals(rel.getType())
+                            || "dependency".equals(rel.getType())) {
 
-                        // Fuente = esta clase
+                        // 1) Normalizar etiquetas (vacías -> "1")
+                        String rawSource = (rel.getLabels().size() > 0 && rel.getLabels().get(0) != null)
+                                ? rel.getLabels().get(0).trim()
+                                : "";
+                        String rawTarget = (rel.getLabels().size() > 1 && rel.getLabels().get(1) != null)
+                                ? rel.getLabels().get(1).trim()
+                                : "";
+
+                        String sourceCard = rawSource.isEmpty() ? "*" : rawSource;
+                        String targetCard = rawTarget.isEmpty() ? "1" : rawTarget;
+
+                        // 2) Regla por defecto para dependency SIN multiplicidades (o vacías)
+                        if ("dependency".equals(rel.getType())) {
+                            boolean noMultis = (rawSource.isEmpty() && rawTarget.isEmpty());
+                            if (noMultis) {
+                                // por defecto: muchos dependientes (*)
+                                // apuntan a un principal (1)
+                                sourceCard = "*";
+                                targetCard = "1";
+                            }
+                        }
+
+                        // 3) Detectar "many"
+                        boolean sourceIsMany = sourceCard.contains("*");
+                        boolean targetIsMany = targetCard.contains("*");
+
+                        // (opcional) tipo PK target, si lo necesitas
+                        UmlClass targetClassObj = schema.getClasses().stream()
+                                .filter(pc -> pc.getName().equals(targetName))
+                                .findFirst().orElse(null);
+                        String targetPkType = "Long";
+                        if (targetClassObj != null && !targetClassObj.getAttributes().isEmpty()) {
+                            targetPkType = TypeMapper.toJava(targetClassObj.getAttributes().get(0).getType());
+                        }
+                        // 👇 Nuevo: nunca dejes que dependency sea tratado como 1..1
+                        if ("dependency".equals(rel.getType()) && !sourceIsMany && !targetIsMany) {
+                            sourceIsMany = true;
+                            targetIsMany = false;
+                        }
+
+
+                        // === Lado SOURCE = esta clase ===
                         if (c.getName().equals(sourceName)) {
                             if (!sourceIsMany && targetIsMany) {
-                                // OneToMany
+                                // 1..* => OneToMany en source
                                 oneToMany.add(Map.of(
                                         "TargetEntity", targetEntity,
                                         "collectionField", NamingUtil.plural(NamingUtil.toField(targetEntity)),
                                         "mappedBy", NamingUtil.toField(sourceEntity)
                                 ));
                             } else if (!sourceIsMany && !targetIsMany) {
-                                // OneToOne
+                                // 1..1 => OneToOne
+                                boolean isComposition = "composition".equals(rel.getType());
                                 oneToOne.add(Map.of(
                                         "TargetEntity", targetEntity,
-                                        "targetField", NamingUtil.toField(targetEntity)
+                                        "targetField", NamingUtil.toField(targetEntity),
+                                        "composition", isComposition
                                 ));
+                                if (isComposition) {
+                                    needsOnDeleteImport = true;
+                                }
                             } else if (sourceIsMany && targetIsMany) {
-                                // ManyToMany
+                                // *..* => ManyToMany
                                 manyToMany.add(Map.of(
                                         "TargetEntity", targetEntity,
                                         "collectionField", NamingUtil.plural(NamingUtil.toField(targetEntity)),
@@ -185,18 +235,36 @@ public class ProjectGenerator {
                                         "thisTable", sourceEntity.toLowerCase(),
                                         "otherTable", targetEntity.toLowerCase()
                                 ));
+                            } else if (sourceIsMany && !targetIsMany) {
+                                // *..1 => ManyToOne
+                                manyToOne.add(Map.of(
+                                        "TargetEntity", targetEntity,
+                                        "targetField", NamingUtil.toField(targetEntity)
+                                ));
                             }
                         }
 
-                        // Target = esta clase
-                        if (c.getName().equals(targetName) && targetIsMany) {
-                            manyToOne.add(Map.of(
-                                    "TargetEntity", sourceEntity,
-                                    "targetField", NamingUtil.toField(sourceEntity)
-                            ));
+                        // === Lado TARGET = esta clase (inversos) ===
+                        if (c.getName().equals(targetName)) {
+                            if (targetIsMany && !sourceIsMany) {
+                                // 1..* => ManyToOne en target hacia source
+                                manyToOne.add(Map.of(
+                                        "TargetEntity", sourceEntity,
+                                        "targetField", NamingUtil.toField(sourceEntity)
+                                ));
+                            } else if (!targetIsMany && sourceIsMany) {
+                                // *..1 => OneToMany en target
+                                oneToMany.add(Map.of(
+                                        "TargetEntity", sourceEntity,
+                                        "collectionField", NamingUtil.plural(NamingUtil.toField(sourceEntity)),
+                                        "mappedBy", NamingUtil.toField(targetEntity)
+                                ));
+                            }
+                            // 1..1 y *..* no se duplican si ya lo generaste en source
                         }
                     }
                 }
+
                 // Si la clase hereda de otra, eliminar atributos duplicados del padre
                 if (parentClass != null) {
                     final String parentClassName = parentClass;
@@ -210,38 +278,40 @@ public class ProjectGenerator {
                                 .map(a -> NamingUtil.toField(a.getName()))
                                 .collect(Collectors.toSet());
 
-                        // eliminar duplicados
                         attrs.removeIf(a -> parentAttrs.contains((String) a.get("name")));
                     }
                 }
             }
-            // Metodos
+
+            // ====== ELIMINAR placeholders “xxxId” si hubo relaciones que los sustituyen ======
+            if (!fkPlaceholderNames.isEmpty()) {
+                attrs.removeIf(a -> fkPlaceholderNames.contains(((String) a.get("name")).toLowerCase()));
+            }
+
+            // ====== MÉTODOS VACÍOS ======
             List<Map<String, Object>> methods = new ArrayList<>();
             for (var m : c.getMethods()) {
                 Map<String, Object> mm = new HashMap<>();
                 String returnType = (m.getReturnType() == null || m.getReturnType().isBlank()) ? "void" : TypeMapper.toJava(m.getReturnType());
-
                 mm.put("name", m.getName());
                 mm.put("parameters", m.getParameters() == null ? "" : m.getParameters());
                 mm.put("returnType", returnType);
 
-                // Si returnType no es void, genera un valor por defecto
                 String defaultReturn = switch (returnType) {
                     case "int", "long", "short", "byte" -> "0";
                     case "double", "float" -> "0.0";
                     case "boolean" -> "false";
                     case "char" -> "'\\u0000'";
-                    default -> "null"; // para String y objetos
+                    default -> "null";
                 };
                 mm.put("defaultReturn", defaultReturn);
-
                 methods.add(mm);
             }
 
             boolean isParent = schema.getRelationships().stream()
                     .anyMatch(r -> "generalization".equals(r.getType()) && r.getTargetId().equals(c.getId()));
 
-            // Contexto para la entidad
+            // ====== CONTEXTO MUSTACHE ======
             Map<String, Object> entityCtx = new HashMap<>();
             entityCtx.put("basePackage", basePackage);
             entityCtx.put("EntityName", entityName);
@@ -252,10 +322,11 @@ public class ProjectGenerator {
             entityCtx.put("manyToMany", manyToMany);
             entityCtx.put("parentClass", parentClass);
             entityCtx.put("methods", methods);
-            entityCtx.put("hasPk", pkName != null);
             entityCtx.put("isParent", isParent);
             entityCtx.put("plural", entityName.toLowerCase());
+            entityCtx.put("needsOnDeleteImport", needsOnDeleteImport);
 
+            // PK para Controller/Service
             if (isChild) {
                 final String parentClassName = parentClass;
                 UmlClass parent = schema.getClasses().stream()
@@ -272,8 +343,10 @@ public class ProjectGenerator {
                     entityCtx.put("pkType", parentPkType);
                     entityCtx.put("pkSetter", pkSetter);
                     entityCtx.put("hasPk", true);
+                } else {
+                    entityCtx.put("hasPk", false);
                 }
-            } else if (pkName != null) {
+            } else if (pkAssigned) {
                 String pkSetter = "set" + Character.toUpperCase(pkName.charAt(0)) + pkName.substring(1);
                 entityCtx.put("pkName", pkName);
                 entityCtx.put("pkType", pkType);
@@ -283,14 +356,11 @@ public class ProjectGenerator {
                 entityCtx.put("hasPk", false);
             }
 
-            // Render entidad
+            // render
             render("Entity.mustache", entityCtx, modelDir.resolve(entityName + ".java"));
-
-            // Render repository, service y controller
             render("Repository.mustache", entityCtx, repoDir.resolve(entityName + "Repository.java"));
             render("Service.mustache", entityCtx, svcDir.resolve(entityName + "Service.java"));
             render("Controller.mustache", entityCtx, ctrlDir.resolve(entityName + "Controller.java"));
-
         }
 
         Path zip = root.getParent().resolve(artifactId + ".zip");

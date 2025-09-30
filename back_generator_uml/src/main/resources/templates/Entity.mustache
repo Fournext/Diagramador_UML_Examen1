@@ -6,6 +6,11 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.experimental.SuperBuilder;
 import java.util.*;
+{{#needsOnDeleteImport}}
+    import org.hibernate.annotations.OnDelete;
+    import org.hibernate.annotations.OnDeleteAction;
+{{/needsOnDeleteImport}}
+import com.fasterxml.jackson.annotation.*;
 
 @Entity
 @Data
@@ -24,7 +29,6 @@ public class {{EntityName}}{{#parentClass}} extends {{parentClass}}{{/parentClas
         {{/generated}}
         private {{type}} {{name}};
     {{/isId}}
-
     {{^isId}}
         private {{type}} {{name}};
     {{/isId}}
@@ -32,18 +36,24 @@ public class {{EntityName}}{{#parentClass}} extends {{parentClass}}{{/parentClas
 
 {{#manyToOne}}
     @ManyToOne
+    @JsonBackReference
     @JoinColumn(name = "{{targetField}}_id")
     private {{TargetEntity}} {{targetField}};
 {{/manyToOne}}
 
 {{#oneToMany}}
     @OneToMany(mappedBy = "{{mappedBy}}", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference
     private List<{{TargetEntity}}> {{collectionField}} = new ArrayList<>();
 {{/oneToMany}}
 
 {{#oneToOne}}
-    @OneToOne
+    @OneToOne{{#composition}}(cascade = CascadeType.ALL, orphanRemoval = true){{/composition}}
+    {{#composition}}
+        @OnDelete(action = OnDeleteAction.CASCADE)
+    {{/composition}}
     @JoinColumn(name = "{{targetField}}_id")
+    @JsonManagedReference
     private {{TargetEntity}} {{targetField}};
 {{/oneToOne}}
 
@@ -54,6 +64,7 @@ public class {{EntityName}}{{#parentClass}} extends {{parentClass}}{{/parentClas
     joinColumns = @JoinColumn(name = "{{thisTable}}_id"),
     inverseJoinColumns = @JoinColumn(name = "{{otherTable}}_id")
     )
+    @JsonManagedReference
     private Set<{{TargetEntity}}> {{collectionField}} = new HashSet<>();
 {{/manyToMany}}
 
